@@ -8,7 +8,7 @@ CSC 667 Term Project — Spring 2026
 |------|--------|-------|
 | Akim Tarasov | AkimT13 | atarasov@sfsu.edu |
 | Mason Lee | mlee82 | mlee82@sfsu.edu |
-| Member 3 | @username | email@sfsu.edu |
+| Mohammed Deeb | MohammedDeeb261 | mdeeb@sfsu.edu |
 | Member 4 | @username | email@sfsu.edu |
 
 ## Setup
