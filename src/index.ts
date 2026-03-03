@@ -1,9 +1,11 @@
 import express, { Request, Response } from "express";
 import path from "path";
+import router from "./test.js";
 const app = express();
 
 const PORT = process.env.PORT || 3005;
 app.use(express.static(path.join(process.cwd(), "public")));
+app.use(router);
 app.get("/", (_req: Request, res: Response) => {
   res.send("<h1>Header</h1>");
 });
