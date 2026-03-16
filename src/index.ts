@@ -1,10 +1,24 @@
 import express, { Request, Response } from "express";
 import path from "path";
 import router from "./test.js";
+import session from "express-session";
 const app = express();
 
 const PORT = process.env.PORT || 3005;
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(process.cwd(), "public")));
+
+app.use(
+  session({
+    // store: new pgSession({ conString: process.env.DATABASE_URL }),
+    secret: process.env.SESSION_SECRET || "fallback-secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: { httpOnly: true, sameSite: "lax" },
+  }),
+);
+
 app.use(router);
 app.get("/", (_req: Request, res: Response) => {
   res.send("<h1>Header</h1>");
@@ -20,6 +34,7 @@ app.get("/image/:id", (req: Request, res: Response) => {
     res.status(400).send("Image does not exist");
   }
 });
+
 app.listen(PORT, () => {
   console.log(`Test hot reload by changing this line`);
 });

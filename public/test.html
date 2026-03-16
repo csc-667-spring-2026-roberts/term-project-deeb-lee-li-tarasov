@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>M6 Authentication Test</title>
+    <style>
+        body { font-family: sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; }
+        .test-section { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin: 12px 0; }
+        button { padding: 8px 16px; margin: 4px; cursor: pointer; border-radius: 4px; border: 1px solid #999; }
+        button:hover { background: #eee; }
+        .log { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; margin-top: 20px;
+               font-family: monospace; font-size: 13px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; }
+        .pass { color: #4ec9b0; }
+        .fail { color: #f44747; }
+        .info { color: #569cd6; }
+        input { padding: 6px 10px; margin: 4px; border: 1px solid #ccc; border-radius: 4px; }
+        label { display: inline-block; width: 80px; }
+    </style>
+</head>
+<body>
+    <h1>M6: Authentication System Test</h1>
+
+    <div class="test-section">
+        <h3>1. Register</h3>
+        <div>
+            <label>Email:</label><input id="reg-email" placeholder="email@sfsu.edu" /><br>
+            <label>Username:</label><input id="reg-username" placeholder="Username" /><br>
+            <label>Password:</label><input id="reg-password" type="password" placeholder="Password" />
+        </div>
+        <button onclick="register()">Register</button>
+    </div>
+
+    <div class="test-section">
+        <h3>2. Login</h3>
+        <div>
+            <label>Email:</label><input id="login-email" placeholder="email@sfsu.edu" /><br>
+            <label>Password:</label><input id="login-password" type="password" placeholder="Password" />
+        </div>
+        <button onclick="login()">Log In</button>
+        <button onclick="loginBad()">Log In (wrong password)</button>
+    </div>
+
+    <div class="test-section">
+        <h3>3. Session &amp; Protected Route</h3>
+        <button onclick="testProtected()">Access /dbtest (needs login)</button>
+        <button onclick="logout()">Log Out</button>
+        <button onclick="testProtected()">Access /dbtest (after logout)</button>
+    </div>
+
+    <div class="test-section">
+        <h3>4. Run All Tests</h3>
+        <button onclick="runAll()">Run Full Test Suite</button>
+    </div>
+
+    <div class="log" id="log">Click a button or "Run Full Test Suite" to begin...</div>
+
+    <script>
+        function log(msg, type = '') {
+            const el = document.getElementById('log');
+            const span = document.createElement('span');
+            span.className = type;
+            span.textContent = msg + '\n';
+            el.appendChild(span);
+            el.scrollTop = el.scrollHeight;
+        }
+        function clearLog() { document.getElementById('log').innerHTML = ''; }
+
+        async function register() {
+            const email = document.getElementById('reg-email').value;
+            const username = document.getElementById('reg-username').value;
+            const password = document.getElementById('reg-password').value;
+            log(`POST /auth/register  { email: "${email}", username: "${username}" }`, 'info');
+            const res = await fetch('/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password, username })
+            });
+            const text = await res.text();
+            log(`  → ${res.status} ${res.statusText}: ${text}`, res.ok ? 'pass' : 'fail');
+        }
+
+        async function login() {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            log(`POST /auth/login  { email: "${email}" }`, 'info');
+            const res = await fetch('/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            const text = await res.text();
+            log(`  → ${res.status} ${res.statusText}: ${text}`, res.ok ? 'pass' : 'fail');
+        }
+
+        async function loginBad() {
+            const email = document.getElementById('login-email').value;
+            log(`POST /auth/login  { email: "${email}", password: "WRONG" }`, 'info');
+            const res = await fetch('/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password: 'WRONG_PASSWORD' })
+            });
+            const text = await res.text();
+            log(`  → ${res.status} (expected 401): ${text}`, res.status === 401 ? 'pass' : 'fail');
+        }
+
+        async function logout() {
+            log('POST /auth/logout', 'info');
+            const res = await fetch('/auth/logout', { method: 'POST' });
+            const text = await res.text();
+            log(`  → ${res.status} ${res.statusText}: ${text}`, res.ok ? 'pass' : 'fail');
+        }
+
+        async function testProtected() {
+            log('GET /dbtest (protected route)', 'info');
+            const res = await fetch('/dbtest');
+            const text = await res.text();
+            log(`  → ${res.status} ${res.statusText}: ${text}`, res.ok ? 'pass' : 'fail');
+        }
+
+        async function runAll() {
+            clearLog();
+            log('=== FULL AUTH TEST SUITE ===\n', 'info');
+
+            // 1. Register
+            log('--- Test 1: Register new user ---', 'info');
+            let res = await fetch('/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: 'test_' + Date.now() + '@sfsu.edu', password: 'password123', username: 'TestUser_' + Date.now() })
+            });
+            let text = await res.text();
+            log(`  Register: ${res.status} → ${text}`, res.ok ? 'pass' : 'fail');
+
+            // 2. Protected route while logged in (session set by register)
+            log('\n--- Test 2: Access protected route (logged in) ---', 'info');
+            res = await fetch('/dbtest');
+            text = await res.text();
+            log(`  /dbtest: ${res.status} → ${text.substring(0, 120)}`, res.ok ? 'pass' : 'fail');
+
+            // 3. Logout
+            log('\n--- Test 3: Logout ---', 'info');
+            res = await fetch('/auth/logout', { method: 'POST' });
+            text = await res.text();
+            log(`  Logout: ${res.status} → ${text}`, res.ok ? 'pass' : 'fail');
+
+            // 4. Protected route after logout (should be 401)
+            log('\n--- Test 4: Access protected route (logged out, expect 401) ---', 'info');
+            res = await fetch('/dbtest');
+            text = await res.text();
+            log(`  /dbtest: ${res.status} (expected 401) → ${text}`, res.status === 401 ? 'pass' : 'fail');
+
+            // 5. Login with correct credentials
+            log('\n--- Test 5: Login with wrong password (expect 401) ---', 'info');
+            res = await fetch('/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: 'sarah@sfsu.edu', password: 'WRONG' })
+            });
+            text = await res.text();
+            log(`  Login (bad pw): ${res.status} (expected 401) → ${text}`, res.status === 401 ? 'pass' : 'fail');
+
+            // 6. Login with correct credentials
+            log('\n--- Test 6: Login with correct password ---', 'info');
+            res = await fetch('/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: 'sarah@sfsu.edu', password: 'password123' })
+            });
+            text = await res.text();
+            log(`  Login: ${res.status} → ${text}`, res.ok ? 'pass' : 'fail');
+
+            // 7. Duplicate registration (should fail)
+            log('\n--- Test 7: Duplicate registration (expect 500) ---', 'info');
+            res = await fetch('/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: 'sarah@sfsu.edu', password: 'password123', username: 'SarahJane' })
+            });
+            text = await res.text();
+            log(`  Duplicate register: ${res.status} (expected 500) → ${text}`, res.status === 500 ? 'pass' : 'fail');
+
+            log('\n=== TESTS COMPLETE ===', 'info');
+        }
+    </script>
+</body>
+</html>
