@@ -1,10 +1,15 @@
-import express, { Request, Response } from "express";
+import express from "express";
 import path from "path";
-import router from "./test.js";
 import session from "express-session";
-const app = express();
+import router from "./test.js";
+import { attachCurrentUser } from "./middleware/auth.js";
 
+const app = express();
 const PORT = process.env.PORT || 3005;
+
+app.set("view engine", "ejs");
+app.set("views", path.join(process.cwd(), "views"));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(process.cwd(), "public")));
@@ -19,22 +24,9 @@ app.use(
   }),
 );
 
+app.use(attachCurrentUser);
 app.use(router);
-app.get("/", (_req: Request, res: Response) => {
-  res.send("<h1>Header</h1>");
-});
-
-app.get("/image/:id", (req: Request, res: Response) => {
-  const imageId = req.params.id as string;
-
-  const filePath = path.join(process.cwd(), "public", `${imageId}.jpg`);
-  try {
-    res.sendFile(filePath);
-  } catch {
-    res.status(400).send("Image does not exist");
-  }
-});
 
 app.listen(PORT, () => {
-  console.log(`Test hot reload by changing this line`);
+  console.log(`Server listening on port ${PORT}`);
 });

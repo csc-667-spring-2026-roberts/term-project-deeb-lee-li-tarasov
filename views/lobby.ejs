@@ -1,0 +1,26 @@
+<%- include("partials/header", { title, currentUser: user }) %>
+
+<div class="card stack">
+  <div>
+    <h1>Lobby</h1>
+    <p class="muted">This page is protected by the auth middleware.</p>
+  </div>
+
+  <div class="user-grid">
+    <img class="avatar" src="<%= gravatarUrl %>" alt="User avatar" />
+    <div class="stack">
+      <div><strong>Username:</strong> <%= user.username %></div>
+      <div><strong>Email:</strong> <%= user.email %></div>
+      <div><strong>User ID:</strong> <%= user.id %></div>
+      <div><strong>Joined:</strong> <%= new Date(user.created_at).toLocaleString() %></div>
+    </div>
+  </div>
+
+  <div>
+    <form class="inline-form" action="/auth/logout" method="POST">
+      <button type="submit">Log out</button>
+    </form>
+  </div>
+</div>
+
+<%- include("partials/footer") %>
