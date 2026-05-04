@@ -60,6 +60,13 @@ router.get("/lobby", protectRoute, async (req, res) => {
   });
 });
 
+router.get("/api/users", protectRoute, async (_req, res) => {
+  const users = await db.any<{ username: string; email: string }>(
+    "SELECT username, email FROM users",
+  );
+  res.json(users);
+});
+
 router.get("/dbtest", protectRoute, async (_req, res) => {
   const records = await db.any("SELECT id, username, email, created_at FROM users;");
   res.render("dbtest", {

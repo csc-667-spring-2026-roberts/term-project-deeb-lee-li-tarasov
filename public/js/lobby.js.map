@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../src/client/lobby.ts"],
+  "sourcesContent": ["interface User {\n  username: string;\n  email: string;\n}\n\nconst button = document.getElementById(\"load-users\") as HTMLButtonElement;\nconst list = document.getElementById(\"user-list\") as HTMLUListElement;\nconst template = document.getElementById(\"user-row\") as HTMLTemplateElement;\n\nbutton.addEventListener(\"click\", async () => {\n  const res = await fetch(\"/api/users\");\n  const users = (await res.json()) as User[];\n\n  list.replaceChildren();\n\n  for (const user of users) {\n    const clone = template.content.cloneNode(true) as DocumentFragment;\n    const nameEl = clone.querySelector(\"[data-username]\")!;\n    const emailEl = clone.querySelector(\"[data-email]\")!;\n    nameEl.textContent = user.username;\n    emailEl.textContent = user.email;\n    list.appendChild(clone);\n  }\n});\n"],
+  "mappings": ";AAKA,IAAM,SAAS,SAAS,eAAe,YAAY;AACnD,IAAM,OAAO,SAAS,eAAe,WAAW;AAChD,IAAM,WAAW,SAAS,eAAe,UAAU;AAEnD,OAAO,iBAAiB,SAAS,YAAY;AAC3C,QAAM,MAAM,MAAM,MAAM,YAAY;AACpC,QAAM,QAAS,MAAM,IAAI,KAAK;AAE9B,OAAK,gBAAgB;AAErB,aAAW,QAAQ,OAAO;AACxB,UAAM,QAAQ,SAAS,QAAQ,UAAU,IAAI;AAC7C,UAAM,SAAS,MAAM,cAAc,iBAAiB;AACpD,UAAM,UAAU,MAAM,cAAc,cAAc;AAClD,WAAO,cAAc,KAAK;AAC1B,YAAQ,cAAc,KAAK;AAC3B,SAAK,YAAY,KAAK;AAAA,EACxB;AACF,CAAC;",
+  "names": []
+}
