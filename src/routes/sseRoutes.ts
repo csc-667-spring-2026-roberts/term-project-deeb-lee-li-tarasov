@@ -9,18 +9,18 @@ interface BroadcastBody {
 
 const router = Router();
 
-router.get(["/api/sse", "/api/events"], sseHandler);
+router.get("/api/sse", sseHandler);
+router.get("/api/events", sseHandler);
 
 router.post("/api/events/broadcast", (req, res) => {
   const { event = "message", data = {}, room } = req.body as BroadcastBody;
-  const sent = broadcastSse(event, data, room);
+  const sent = broadcastSse(data, { event, room });
 
   res.json({ ok: true, sent });
 });
 
-router.get("/api/events/status", (req, res) => {
-  const room = typeof req.query.room === "string" ? req.query.room : undefined;
-  res.json({ clients: getSseClientCount(room) });
+router.get("/api/events/status", (_req, res) => {
+  res.json({ clients: getSseClientCount() });
 });
 
 export default router;
