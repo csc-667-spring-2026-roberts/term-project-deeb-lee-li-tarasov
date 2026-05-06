@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { broadcastSse, sseHandler } from "./sse.js";
 import bcrypt from "bcrypt";
 import db from "./db/connection.js";
 import {
@@ -18,6 +19,12 @@ interface AuthFormBody {
   email?: string;
   password?: string;
   username?: string;
+}
+
+interface BroadcastBody {
+  event?: string;
+  room?: string;
+  payload?: Record<string, unknown>;
 }
 
 const router = Router();
@@ -58,6 +65,16 @@ router.get("/lobby", protectRoute, async (req, res) => {
     title: "Lobby",
     user,
   });
+});
+
+
+router.get("/api/sse", sseHandler);
+router.get("/api/events", sseHandler);
+
+router.post("/api/events/broadcast", (req, res) => {
+  const { event = "state", room, payload = {} } = req.body as BroadcastBody;
+  const sent = broadcastSse(payload, { event, room });
+  res.json({ ok: true, sent });
 });
 
 router.get("/api/users", protectRoute, async (_req, res) => {
