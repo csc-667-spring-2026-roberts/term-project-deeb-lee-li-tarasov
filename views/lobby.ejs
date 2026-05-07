@@ -17,7 +17,12 @@
   </div>
 
   <div>
-    <button id="load-users">Show Users</button>
+    <p>SSE: <span id="sse-status">connecting...</span></p>
+    <ul id="sse-events"></ul>
+  </div>
+
+  <div>
+    <button id="load-users">Online Users</button>
     <ul id="user-list"></ul>
   </div>
 
@@ -29,9 +34,7 @@
 </div>
 
 <template id="user-row">
-  <li>
-    <span data-username></span> — <span data-email></span>
-  </li>
+  <li><span data-username></span></li>
 </template>
 
 <script defer src="/js/lobby.js" type="module"></script>

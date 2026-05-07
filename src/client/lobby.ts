@@ -1,16 +1,16 @@
-interface User {
-  username: string;
-  email: string;
-}
-
 interface LobbyState {
   connected: boolean;
-  room: string;
   lastEvent: string;
   payload: unknown;
 }
 
 type Listener = (state: LobbyState) => void;
+
+interface Store {
+  getState: () => LobbyState;
+  setState: (patch: Partial<LobbyState>) => void;
+  subscribe: (listener: Listener) => () => void;
+}
 
 const button = document.getElementById("load-users") as HTMLButtonElement | null;
 const list = document.getElementById("user-list") as HTMLUListElement | null;
@@ -18,77 +18,74 @@ const template = document.getElementById("user-row") as HTMLTemplateElement | nu
 const statusEl = document.getElementById("sse-status");
 const eventsEl = document.getElementById("sse-events");
 
-const store = (() => {
-  let state: LobbyState = {
-    connected: false,
-    room: "lobby",
-    lastEvent: "none",
-    payload: null,
-  };
+const store = ((): Store => {
+  let state: LobbyState = { connected: false, lastEvent: "", payload: null };
   const listeners = new Set<Listener>();
 
   return {
     getState: (): LobbyState => state,
     setState: (patch: Partial<LobbyState>): void => {
       state = { ...state, ...patch };
-      for (const listener of listeners) listener(state);
+      for (const listener of listeners) {
+        listener(state);
+      }
     },
     subscribe: (listener: Listener): (() => void) => {
       listeners.add(listener);
       listener(state);
-      return () => listeners.delete(listener);
+      return () => {
+        listeners.delete(listener);
+      };
     },
   };
 })();
 
 const renderState = (state: LobbyState): void => {
   if (statusEl) {
-    statusEl.textContent = state.connected
-      ? `Connected to ${state.room}`
-      : `Reconnecting to ${state.room}...`;
+    statusEl.textContent = state.connected ? "Connected" : "Reconnecting...";
   }
 
-  if (eventsEl) {
+  if (eventsEl && state.lastEvent) {
     const item = document.createElement("li");
-    item.textContent = `${new Date().toLocaleTimeString()} ${state.lastEvent}: ${JSON.stringify(
-      state.payload,
-    )}`;
+    item.textContent = `${new Date().toLocaleTimeString()} — ${state.lastEvent}: ${JSON.stringify(state.payload)}`;
     eventsEl.prepend(item);
   }
 };
 
 store.subscribe(renderState);
 
-if (button && list && template) {
-  button.addEventListener("click", () => {
-    void fetch("/api/users")
-      .then((res) => res.json())
-      .then((users) => {
-        list.replaceChildren();
-        for (const user of users as User[]) {
-          const clone = template.content.cloneNode(true) as DocumentFragment;
-          const nameEl = clone.querySelector("[data-username]");
-          const emailEl = clone.querySelector("[data-email]");
-          if (nameEl) nameEl.textContent = user.username;
-          if (emailEl) emailEl.textContent = user.email;
-          list.appendChild(clone);
-        }
-      });
-  });
+function loadOnlineUsers(): void {
+  if (!button || !list || !template) return;
+  void fetch("/api/lobby/users")
+    .then((res) => res.json())
+    .then((users) => {
+      list.replaceChildren();
+      for (const username of users as string[]) {
+        const clone = template.content.cloneNode(true) as DocumentFragment;
+        const nameEl = clone.querySelector("[data-username]");
+        if (nameEl) nameEl.textContent = username;
+        list.appendChild(clone);
+      }
+    });
+}
+
+if (button) {
+  button.addEventListener("click", loadOnlineUsers);
 }
 
 const connectSse = (): void => {
-  const source = new EventSource(`/api/sse?room=${encodeURIComponent(store.getState().room)}`);
+  const source = new EventSource("/api/lobby/connect");
 
   source.addEventListener("open", () => {
-    store.setState({ connected: true, lastEvent: "open", payload: null });
+    store.setState({ connected: true });
+    loadOnlineUsers();
   });
 
   source.addEventListener("connected", (event) => {
     store.setState({
       connected: true,
       lastEvent: "connected",
-      payload: JSON.parse((event as MessageEvent).data) as unknown,
+      payload: JSON.parse((event as MessageEvent<string>).data) as unknown,
     });
   });
 
@@ -96,8 +93,9 @@ const connectSse = (): void => {
     store.setState({
       connected: true,
       lastEvent: "state",
-      payload: JSON.parse((event as MessageEvent).data) as unknown,
+      payload: JSON.parse((event as MessageEvent<string>).data) as unknown,
     });
+    loadOnlineUsers();
   });
 
   source.addEventListener("error", () => {

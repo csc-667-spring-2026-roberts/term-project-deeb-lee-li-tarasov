@@ -13,7 +13,7 @@ const startServer = async (): Promise<{ baseUrl: string; server: Server }> => {
     throw new Error("Unable to start test server");
   }
 
-  return { baseUrl: `http://127.0.0.1:${address.port}`, server };
+  return { baseUrl: `http://127.0.0.1:${String(address.port)}`, server };
 };
 
 const closeServer = async (server: Server): Promise<void> => {
@@ -39,8 +39,8 @@ const readUntil = async (
   return buffer;
 };
 
-describe("Milestone 9 SSE", () => {
-  it("returns text/event-stream and keeps the connection open", async () => {
+void describe("Milestone 9 SSE", () => {
+  void it("returns text/event-stream and keeps the connection open", async () => {
     const { baseUrl, server } = await startServer();
 
     try {
@@ -59,7 +59,7 @@ describe("Milestone 9 SSE", () => {
     }
   });
 
-  it("broadcasts events to clients subscribed to the same room", async () => {
+  void it("broadcasts events to clients subscribed to the same room", async () => {
     const { baseUrl, server } = await startServer();
 
     try {
@@ -86,7 +86,7 @@ describe("Milestone 9 SSE", () => {
     }
   });
 
-  it("sends broadcasts to multiple subscribers", async () => {
+  void it("sends broadcasts to multiple subscribers", async () => {
     const { baseUrl, server } = await startServer();
 
     try {

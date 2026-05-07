@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { broadcastSse, sseHandler } from "./sse.js";
+import { broadcastSse, sseHandler, lobbyConnect, getOnlineUsers } from "./sse.js";
 import bcrypt from "bcrypt";
 import db from "./db/connection.js";
 import {
@@ -67,9 +67,17 @@ router.get("/lobby", protectRoute, async (req, res) => {
   });
 });
 
-
 router.get("/api/sse", sseHandler);
 router.get("/api/events", sseHandler);
+
+router.get("/api/lobby/connect", protectRoute, (req, res) => {
+  const user = res.locals.currentUser as AuthenticatedUser | null;
+  lobbyConnect(req, res, user?.username ?? "");
+});
+
+router.get("/api/lobby/users", protectRoute, (_req, res) => {
+  res.json(getOnlineUsers("lobby"));
+});
 
 router.post("/api/events/broadcast", (req, res) => {
   const { event = "state", room, payload = {} } = req.body as BroadcastBody;
