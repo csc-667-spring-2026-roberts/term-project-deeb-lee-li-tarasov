@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "npm run build:server && npm run build:client",
     "build:client": "node esbuild.config.mjs",
     "start": "node dist/index.js",
     "dev": "concurrently \"tsx watch src/index.ts\" \"node esbuild.config.mjs --watch\"",
@@ -14,7 +14,8 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "clean": "rm -rf dist/",
-    "prepare": "husky"
+    "prepare": "husky || true",
+    "build:server": "tsc"
   },
   "lint-staged": {
     "src/**/*.ts": [
