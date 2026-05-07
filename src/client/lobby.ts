@@ -1,7 +1,5 @@
 interface LobbyState {
   connected: boolean;
-  lastEvent: string;
-  payload: unknown;
 }
 
 type Listener = (state: LobbyState) => void;
@@ -16,10 +14,9 @@ const button = document.getElementById("load-users") as HTMLButtonElement | null
 const list = document.getElementById("user-list") as HTMLUListElement | null;
 const template = document.getElementById("user-row") as HTMLTemplateElement | null;
 const statusEl = document.getElementById("sse-status");
-const eventsEl = document.getElementById("sse-events");
 
 const store = ((): Store => {
-  let state: LobbyState = { connected: false, lastEvent: "", payload: null };
+  let state: LobbyState = { connected: false };
   const listeners = new Set<Listener>();
 
   return {
@@ -43,12 +40,6 @@ const store = ((): Store => {
 const renderState = (state: LobbyState): void => {
   if (statusEl) {
     statusEl.textContent = state.connected ? "Connected" : "Reconnecting...";
-  }
-
-  if (eventsEl && state.lastEvent) {
-    const item = document.createElement("li");
-    item.textContent = `${new Date().toLocaleTimeString()} — ${state.lastEvent}: ${JSON.stringify(state.payload)}`;
-    eventsEl.prepend(item);
   }
 };
 
@@ -81,25 +72,12 @@ const connectSse = (): void => {
     loadOnlineUsers();
   });
 
-  source.addEventListener("connected", (event) => {
-    store.setState({
-      connected: true,
-      lastEvent: "connected",
-      payload: JSON.parse((event as MessageEvent<string>).data) as unknown,
-    });
-  });
-
-  source.addEventListener("state", (event) => {
-    store.setState({
-      connected: true,
-      lastEvent: "state",
-      payload: JSON.parse((event as MessageEvent<string>).data) as unknown,
-    });
+  source.addEventListener("state", () => {
     loadOnlineUsers();
   });
 
   source.addEventListener("error", () => {
-    store.setState({ connected: false, lastEvent: "error", payload: null });
+    store.setState({ connected: false });
   });
 };
 

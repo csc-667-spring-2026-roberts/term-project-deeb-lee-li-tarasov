@@ -3,9 +3,8 @@ var button = document.getElementById("load-users");
 var list = document.getElementById("user-list");
 var template = document.getElementById("user-row");
 var statusEl = document.getElementById("sse-status");
-var eventsEl = document.getElementById("sse-events");
 var store = /* @__PURE__ */ (() => {
-  let state = { connected: false, lastEvent: "", payload: null };
+  let state = { connected: false };
   const listeners = /* @__PURE__ */ new Set();
   return {
     getState: () => state,
@@ -27,11 +26,6 @@ var store = /* @__PURE__ */ (() => {
 var renderState = (state) => {
   if (statusEl) {
     statusEl.textContent = state.connected ? "Connected" : "Reconnecting...";
-  }
-  if (eventsEl && state.lastEvent) {
-    const item = document.createElement("li");
-    item.textContent = `${(/* @__PURE__ */ new Date()).toLocaleTimeString()} \u2014 ${state.lastEvent}: ${JSON.stringify(state.payload)}`;
-    eventsEl.prepend(item);
   }
 };
 store.subscribe(renderState);
@@ -56,23 +50,11 @@ var connectSse = () => {
     store.setState({ connected: true });
     loadOnlineUsers();
   });
-  source.addEventListener("connected", (event) => {
-    store.setState({
-      connected: true,
-      lastEvent: "connected",
-      payload: JSON.parse(event.data)
-    });
-  });
-  source.addEventListener("state", (event) => {
-    store.setState({
-      connected: true,
-      lastEvent: "state",
-      payload: JSON.parse(event.data)
-    });
+  source.addEventListener("state", () => {
     loadOnlineUsers();
   });
   source.addEventListener("error", () => {
-    store.setState({ connected: false, lastEvent: "error", payload: null });
+    store.setState({ connected: false });
   });
 };
 connectSse();
