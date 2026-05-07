@@ -1,8 +1,8 @@
 <%- include("partials/header", { title, currentUser }) %>
 <div class="card stack">
   <div>
-    <h1>Create an account</h1>
-    <p class="muted">Register here, then you will be redirected to the lobby.</p>
+    <h1>Join the Investigation</h1>
+    <p class="muted">Create an account to start playing Cluedo.</p>
   </div>
 
   <% if (error) { %>
@@ -28,6 +28,6 @@
     <button type="submit">Register</button>
   </form>
 
-  <p class="muted">Already have an account? <a href="/login">Log in</a></p>
+  <p class="muted">Already have an account? <a href="/login">Sign in</a></p>
 </div>
 <%- include("partials/footer") %>

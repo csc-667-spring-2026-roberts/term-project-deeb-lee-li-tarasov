@@ -1,34 +1,35 @@
 <%- include("partials/header", { title, currentUser: user }) %>
 
-<div class="card stack">
+<div class="card stack wide">
   <div>
-    <h1>Lobby</h1>
-    <p class="muted">This page is protected by the auth middleware.</p>
+    <h1>The Lobby</h1>
+    <p class="muted">Waiting for players to gather before the game begins.</p>
   </div>
 
   <div class="user-grid">
-    <img class="avatar" src="<%= gravatarUrl %>" alt="User avatar" />
+    <img class="avatar" src="<%= gravatarUrl %>" alt="Avatar" />
     <div class="stack">
-      <div><strong>Username:</strong> <%= user.username %></div>
-      <div><strong>Email:</strong> <%= user.email %></div>
-      <div><strong>User ID:</strong> <%= user.id %></div>
-      <div><strong>Joined:</strong> <%= new Date(user.created_at).toLocaleString() %></div>
+      <div><strong><%= user.username %></strong></div>
+      <div class="muted"><%= user.email %></div>
+      <div class="muted">Joined <%= new Date(user.created_at).toLocaleDateString() %></div>
     </div>
   </div>
 
   <div>
-    <p>SSE: <span id="sse-status">connecting...</span></p>
+    <h2>Live Connection</h2>
+    <p class="status-line">Status: <span id="sse-status">connecting...</span></p>
     <ul id="sse-events"></ul>
   </div>
 
   <div>
-    <button id="load-users">Online Users</button>
+    <h2>Players in Lobby</h2>
+    <button id="load-users">Refresh</button>
     <ul id="user-list"></ul>
   </div>
 
   <div>
     <form class="inline-form" action="/auth/logout" method="POST">
-      <button type="submit">Log out</button>
+      <button type="submit">Leave Mansion</button>
     </form>
   </div>
 </div>

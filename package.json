@@ -14,6 +14,7 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "clean": "rm -rf dist/",
+    "migrate": "tsx src/db/migrate.ts",
     "test": "node --import=tsx/esm --test src/sse.test.ts",
     "prepare": "husky || true",
     "build:server": "tsc"
