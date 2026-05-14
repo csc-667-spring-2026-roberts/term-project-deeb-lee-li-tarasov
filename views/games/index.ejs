@@ -1,0 +1,54 @@
+<%- include("../partials/header", { title, currentUser: user }) %>
+
+<div class="card stack wide">
+  <div>
+    <h1>Game Room</h1>
+    <p class="muted">Create a new game or join one below.</p>
+  </div>
+
+  <% if (error) { %>
+    <p class="error"><%= error %></p>
+  <% } %>
+
+  <div>
+    <form method="POST" action="/games">
+      <button type="submit">Create New Game</button>
+    </form>
+  </div>
+
+  <div>
+    <h2>Open Games</h2>
+    <% if (games.length === 0) { %>
+      <p class="muted">No open games. Create one to get started.</p>
+    <% } else { %>
+      <ul class="game-list">
+        <% for (const game of games) { %>
+          <li class="game-row">
+            <div class="game-row-info">
+              <span>Game #<%= game.id %></span>
+              <span class="muted">hosted by <%= game.creator_username %></span>
+            </div>
+            <div class="game-row-actions">
+              <span class="muted"><%= game.player_count %>/<%= game.max_players %></span>
+              <% if (game.user_in_game) { %>
+                <a href="/games/<%= game.id %>" class="btn-small">Enter</a>
+              <% } else if (game.player_count < game.max_players) { %>
+                <form class="inline-form" method="POST" action="/games/<%= game.id %>/join">
+                  <button type="submit">Join</button>
+                </form>
+              <% } else { %>
+                <span class="muted">Full</span>
+              <% } %>
+            </div>
+          </li>
+        <% } %>
+      </ul>
+    <% } %>
+  </div>
+
+  <div>
+    <a href="/lobby">← Back to Lobby</a>
+  </div>
+</div>
+
+<%- include("../partials/footer") %>

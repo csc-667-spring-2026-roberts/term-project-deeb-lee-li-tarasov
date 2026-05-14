@@ -7,6 +7,7 @@ import {
   redirectIfAuthenticated,
   type AuthenticatedUser,
 } from "./middleware/auth.js";
+import gamesRouter from "./routes/games.js";
 import "express-session";
 
 declare module "express-session" {
@@ -187,5 +188,7 @@ router.post("/auth/logout", (req, res) => {
     res.redirect("/login");
   });
 });
+
+router.use(gamesRouter);
 
 export default router;

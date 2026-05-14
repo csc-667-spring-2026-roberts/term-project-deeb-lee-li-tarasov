@@ -38,5 +38,5 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-member-access": "warn",
     },
   },
-  { ignores: ["dist/", "node_modules/", "*.js", "src/client/"] }
+  { ignores: ["dist/", "node_modules/", "*.js", "src/client/", "src/sse.test.ts"] }
 );

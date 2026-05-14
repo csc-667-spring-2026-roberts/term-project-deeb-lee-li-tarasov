@@ -1,0 +1,45 @@
+<%- include("../partials/header", { title, currentUser: user }) %>
+
+<div class="card stack wide">
+  <div>
+    <h1>Game #<%= game.id %></h1>
+    <p class="muted">Status: <%= game.status %></p>
+  </div>
+
+  <% if (typeof error !== 'undefined' && error) { %>
+    <p class="error"><%= error %></p>
+  <% } %>
+
+  <% if (game.status === 'lobby') { %>
+    <% if (isCreator) { %>
+      <form method="POST" action="/games/<%= game.id %>/start">
+        <button type="submit">Start Game</button>
+      </form>
+    <% } else { %>
+      <p class="muted">Waiting for the host to start...</p>
+    <% } %>
+  <% } %>
+
+  <div>
+    <h2>Players</h2>
+    <ul class="player-list">
+      <% for (const p of players) { %>
+        <li class="player-row<%= p.is_current_turn ? ' active-turn' : '' %>">
+          <div class="player-row-info">
+            <span><%= p.username %></span>
+            <span class="muted"><%= p.character %></span>
+          </div>
+          <% if (p.is_current_turn) { %>
+            <span class="turn-badge">Taking Turn</span>
+          <% } %>
+        </li>
+      <% } %>
+    </ul>
+  </div>
+
+  <div>
+    <a href="/games">← Back to Game Room</a>
+  </div>
+</div>
+
+<%- include("../partials/footer") %>
