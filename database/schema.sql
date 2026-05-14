@@ -24,12 +24,13 @@ CREATE TABLE cards (
 
 CREATE TABLE games (
   id SERIAL PRIMARY KEY,
-  status VARCHAR NOT NULL DEFAULT 'lobby',  -- lobby | in_progress | finished | abandoned
-  max_players INTEGER NOT NULL DEFAULT 6,   -- 3–6 players allowed
+  status VARCHAR NOT NULL DEFAULT 'lobby',
+  max_players INTEGER NOT NULL DEFAULT 6,
   created_by INTEGER NOT NULL REFERENCES users(id),
   started_at TIMESTAMP,
   finished_at TIMESTAMP,
-  winner_user_id INTEGER REFERENCES users(id)  -- null until game is resolved
+  winner_user_id INTEGER REFERENCES users(id),
+  current_turn_player_id INTEGER REFERENCES game_players(id)
 );
 
 CREATE TABLE game_players (
@@ -61,7 +62,9 @@ CREATE TABLE board_positions (
   id SERIAL PRIMARY KEY,
   game_id INTEGER NOT NULL REFERENCES games(id),
   player_id INTEGER NOT NULL UNIQUE REFERENCES game_players(id),
-  room VARCHAR NOT NULL,  -- e.g. Kitchen, Ballroom, Library, Hallway_1
+  x INTEGER,
+  y INTEGER,
+  room VARCHAR,
   updated_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
@@ -69,12 +72,15 @@ CREATE TABLE game_turns (
   id SERIAL PRIMARY KEY,
   game_id INTEGER NOT NULL REFERENCES games(id),
   player_id INTEGER NOT NULL REFERENCES game_players(id),
-  turn_number INTEGER NOT NULL,   -- unique within a game
-  dice_roll_1 INTEGER,            -- 1–6
-  dice_roll_2 INTEGER,            -- 1–6
+  turn_number INTEGER NOT NULL,
+  dice_roll_1 INTEGER,
+  dice_roll_2 INTEGER,
   moved_to_room VARCHAR,
-  action_type VARCHAR NOT NULL,   -- move | suggestion | accusation | pass
-  created_at TIMESTAMP NOT NULL DEFAULT now()
+  moved_to_x INTEGER,
+  moved_to_y INTEGER,
+  action_type VARCHAR NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT now(),
+  UNIQUE (game_id, turn_number)
 );
 
 CREATE TABLE suggestions (
@@ -112,8 +118,17 @@ CREATE TABLE player_notes (
   game_id INTEGER NOT NULL REFERENCES games(id),
   player_id INTEGER NOT NULL REFERENCES game_players(id),
   card_id INTEGER NOT NULL REFERENCES cards(id),
-  status VARCHAR NOT NULL DEFAULT 'unknown',  -- unknown | confirmed_held | confirmed_not_solution | suspect
+  status VARCHAR NOT NULL DEFAULT 'unknown',
   noted_at TIMESTAMP NOT NULL DEFAULT now()
+);
+
+CREATE TABLE weapon_positions (
+  id SERIAL PRIMARY KEY,
+  game_id INTEGER NOT NULL REFERENCES games(id),
+  weapon_card_id INTEGER NOT NULL REFERENCES cards(id),
+  room_card_id INTEGER NOT NULL REFERENCES cards(id),
+  updated_at TIMESTAMP NOT NULL DEFAULT now(),
+  UNIQUE (game_id, weapon_card_id)
 );
 
 -- =============================================
