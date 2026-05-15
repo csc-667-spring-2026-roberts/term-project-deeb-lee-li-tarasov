@@ -359,6 +359,176 @@ export async function movePlayer(
   });
 }
 
+interface ActiveSuggestion {
+  id: number;
+  suggesting_player_id: number;
+  suspect_card_id: number;
+  weapon_card_id: number;
+  room_card_id: number;
+  response_count: number;
+}
+
+function getResponders(allPlayers: { id: number }[], suggestingPlayerId: number): { id: number }[] {
+  const idx = allPlayers.findIndex((p) => p.id === suggestingPlayerId);
+  const result: { id: number }[] = [];
+  for (let i = 1; i < allPlayers.length; i++) {
+    const p = allPlayers[(idx + i) % allPlayers.length];
+    if (p) result.push(p);
+  }
+  return result;
+}
+
+export async function makeSuggestion(
+  gameId: number,
+  userId: number,
+  suspectCardId: number,
+  weaponCardId: number,
+): Promise<string | null> {
+  return db.tx(async (t) => {
+    const game = await t.oneOrNone<{ status: string; current_turn_player_id: number | null }>(
+      "SELECT status, current_turn_player_id FROM games WHERE id = $1",
+      [gameId],
+    );
+    if (!game || game.status !== "in_progress") return "Game not in progress.";
+
+    const player = await t.oneOrNone<{ id: number }>(
+      "SELECT id FROM game_players WHERE game_id = $1 AND user_id = $2",
+      [gameId, userId],
+    );
+    if (!player) return "You are not in this game.";
+    if (player.id !== game.current_turn_player_id) return "It is not your turn.";
+
+    const position = await t.oneOrNone<{ room: string | null }>(
+      "SELECT room FROM board_positions WHERE player_id = $1",
+      [player.id],
+    );
+    if (!position?.room) return "You must be in a room to make a suggestion.";
+
+    const turn = await t.oneOrNone<{ id: number; action_type: string }>(
+      `SELECT id, action_type FROM game_turns
+       WHERE game_id = $1 AND player_id = $2 AND moved_to_room IS NOT NULL
+       ORDER BY turn_number DESC LIMIT 1`,
+      [gameId, player.id],
+    );
+    if (!turn) return "You must move to a room first.";
+    if (turn.action_type === "suggestion") return "Already made a suggestion this turn.";
+
+    const suspect = await t.oneOrNone<{ id: number }>(
+      "SELECT id FROM cards WHERE id = $1 AND type = 'suspect'",
+      [suspectCardId],
+    );
+    if (!suspect) return "Invalid suspect card.";
+
+    const weapon = await t.oneOrNone<{ id: number }>(
+      "SELECT id FROM cards WHERE id = $1 AND type = 'weapon'",
+      [weaponCardId],
+    );
+    if (!weapon) return "Invalid weapon card.";
+
+    const roomCard = await t.oneOrNone<{ id: number }>(
+      "SELECT id FROM cards WHERE name = $1 AND type = 'room'",
+      [position.room],
+    );
+    if (!roomCard) return "Room card not found.";
+
+    await t.none("UPDATE game_turns SET action_type = 'suggestion' WHERE id = $1", [turn.id]);
+
+    await t.none(
+      "INSERT INTO suggestions (turn_id, game_id, suggesting_player_id, suspect_card_id, weapon_card_id, room_card_id) VALUES ($1, $2, $3, $4, $5, $6)",
+      [turn.id, gameId, player.id, suspectCardId, weaponCardId, roomCard.id],
+    );
+
+    return null;
+  });
+}
+
+export async function respondToSuggestion(
+  gameId: number,
+  userId: number,
+  cardId: number | null,
+): Promise<{ done: boolean } | string> {
+  return db.tx(async (t) => {
+    const suggestion = await t.oneOrNone<ActiveSuggestion>(
+      `SELECT s.id, s.suggesting_player_id, s.suspect_card_id, s.weapon_card_id, s.room_card_id,
+              (SELECT COUNT(*)::int FROM suggestion_responses WHERE suggestion_id = s.id) AS response_count
+       FROM suggestions s
+       JOIN game_turns gt ON gt.id = s.turn_id
+       WHERE s.game_id = $1
+         AND gt.player_id = (SELECT current_turn_player_id FROM games WHERE id = $1)
+         AND NOT EXISTS (
+           SELECT 1 FROM suggestion_responses WHERE suggestion_id = s.id AND card_shown_id IS NOT NULL
+         )
+       ORDER BY s.id DESC LIMIT 1`,
+      [gameId],
+    );
+    if (!suggestion) return "No active suggestion to respond to.";
+
+    const player = await t.oneOrNone<{ id: number }>(
+      "SELECT id FROM game_players WHERE game_id = $1 AND user_id = $2",
+      [gameId, userId],
+    );
+    if (!player) return "You are not in this game.";
+
+    const allPlayers = await t.any<{ id: number }>(
+      "SELECT id FROM game_players WHERE game_id = $1 AND is_eliminated = false ORDER BY turn_order",
+      [gameId],
+    );
+
+    const responders = getResponders(allPlayers, suggestion.suggesting_player_id);
+    const nextResponder = responders[suggestion.response_count];
+    if (!nextResponder || nextResponder.id !== player.id) return "It is not your turn to respond.";
+
+    if (cardId !== null) {
+      const validCard = await t.oneOrNone<{ id: number }>(
+        `SELECT id FROM game_player_cards
+         WHERE player_id = $1 AND card_id = $2
+           AND card_id IN ($3, $4, $5)`,
+        [
+          player.id,
+          cardId,
+          suggestion.suspect_card_id,
+          suggestion.weapon_card_id,
+          suggestion.room_card_id,
+        ],
+      );
+      if (!validCard) return "You do not hold that card or it is not part of the suggestion.";
+    }
+
+    const responseOrder = suggestion.response_count + 1;
+    await t.none(
+      "INSERT INTO suggestion_responses (suggestion_id, responding_player_id, card_shown_id, response_order) VALUES ($1, $2, $3, $4)",
+      [suggestion.id, player.id, cardId, responseOrder],
+    );
+
+    const done = cardId !== null || responseOrder >= responders.length;
+    return { done };
+  });
+}
+
+export async function advanceTurn(gameId: number): Promise<string | null> {
+  return db.tx(async (t) => {
+    const game = await t.oneOrNone<{ current_turn_player_id: number | null }>(
+      "SELECT current_turn_player_id FROM games WHERE id = $1",
+      [gameId],
+    );
+    if (!game?.current_turn_player_id) return "Game not found.";
+
+    const allPlayers = await t.any<{ id: number }>(
+      "SELECT id FROM game_players WHERE game_id = $1 AND is_eliminated = false ORDER BY turn_order",
+      [gameId],
+    );
+    const currentIndex = allPlayers.findIndex((p) => p.id === game.current_turn_player_id);
+    const nextPlayer = allPlayers[(currentIndex + 1) % allPlayers.length];
+    if (!nextPlayer) return "Failed to advance turn.";
+
+    await t.none("UPDATE games SET current_turn_player_id = $1 WHERE id = $2", [
+      nextPlayer.id,
+      gameId,
+    ]);
+    return null;
+  });
+}
+
 export async function getGameDetail(gameId: number): Promise<GameWithPlayers | null> {
   const game = await db.oneOrNone<GameDetail>(
     "SELECT id, status, max_players, created_by, current_turn_player_id FROM games WHERE id = $1",

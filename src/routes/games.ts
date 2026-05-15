@@ -8,11 +8,23 @@ import {
   getGameDetail,
   rollDice,
   movePlayer,
+  makeSuggestion,
+  respondToSuggestion,
+  advanceTurn,
 } from "../db/games.js";
 import { gameConnect, broadcastSse } from "../sse.js";
 
 interface MoveBody {
   room?: string;
+}
+
+interface SuggestBody {
+  suspectCardId?: number;
+  weaponCardId?: number;
+}
+
+interface RespondBody {
+  cardId?: number | null;
 }
 
 const router = Router();
@@ -142,6 +154,60 @@ router.post("/api/games/:id/move", protectRoute, async (req, res) => {
   }
   broadcastSse({ type: "turn_advanced" }, { event: "state", room: `game:${String(gameId)}` });
   res.json({ ok: true });
+});
+
+router.post("/api/games/:id/suggest", protectRoute, async (req, res) => {
+  const user = res.locals.currentUser as AuthenticatedUser;
+  const gameIdStr = req.params["id"];
+  const gameId = Number(gameIdStr);
+  if (!gameIdStr || isNaN(gameId)) {
+    res.status(400).json({ error: "Invalid game id" });
+    return;
+  }
+  const { suspectCardId, weaponCardId } = req.body as SuggestBody;
+  if (!suspectCardId || !weaponCardId) {
+    res.status(400).json({ error: "suspectCardId and weaponCardId are required" });
+    return;
+  }
+  const error = await makeSuggestion(gameId, user.id, suspectCardId, weaponCardId);
+  if (error) {
+    res.status(400).json({ error });
+    return;
+  }
+  broadcastSse({ type: "suggestion_made" }, { event: "state", room: `game:${String(gameId)}` });
+  res.json({ ok: true });
+});
+
+router.post("/api/games/:id/respond", protectRoute, async (req, res) => {
+  const user = res.locals.currentUser as AuthenticatedUser;
+  const gameIdStr = req.params["id"];
+  const gameId = Number(gameIdStr);
+  if (!gameIdStr || isNaN(gameId)) {
+    res.status(400).json({ error: "Invalid game id" });
+    return;
+  }
+  const body = req.body as RespondBody;
+  if (!("cardId" in body)) {
+    res.status(400).json({ error: "cardId is required (use null to pass)" });
+    return;
+  }
+  const cardId = body.cardId ?? null;
+  const result = await respondToSuggestion(gameId, user.id, cardId);
+  if (typeof result === "string") {
+    res.status(400).json({ error: result });
+    return;
+  }
+  if (result.done) {
+    const advanceError = await advanceTurn(gameId);
+    if (advanceError) {
+      res.status(500).json({ error: advanceError });
+      return;
+    }
+    broadcastSse({ type: "turn_advanced" }, { event: "state", room: `game:${String(gameId)}` });
+  } else {
+    broadcastSse({ type: "response_needed" }, { event: "state", room: `game:${String(gameId)}` });
+  }
+  res.json({ ok: true, done: result.done });
 });
 
 export default router;
