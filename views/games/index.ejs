@@ -51,4 +51,12 @@
   </div>
 </div>
 
+<script>
+  (function () {
+    var es = new EventSource('/api/lobby/connect');
+    es.addEventListener('games', function () { window.location.reload(); });
+    es.addEventListener('error', function () { es.close(); });
+  })();
+</script>
+
 <%- include("../partials/footer") %>

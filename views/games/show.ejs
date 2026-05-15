@@ -154,6 +154,15 @@
 </div>
 
 <script>window.__GAME_STATE__ = <%- JSON.stringify(state) %>;</script>
+<% if (state.game.status === 'lobby') { %>
+<script>
+  (function () {
+    var es = new EventSource('/api/games/<%= state.game.id %>/events');
+    es.addEventListener('state', function () { window.location.reload(); });
+    es.addEventListener('error', function () { es.close(); });
+  })();
+</script>
+<% } %>
 <script defer src="/js/game.js" type="module"></script>
 
 <%- include("../partials/footer") %>

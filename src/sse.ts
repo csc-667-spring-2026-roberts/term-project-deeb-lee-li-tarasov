@@ -21,7 +21,13 @@ function formatSse(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-function connectClient(req: Request, res: Response, room: string, username: string): void {
+function connectClient(
+  req: Request,
+  res: Response,
+  room: string,
+  username: string,
+  onClose?: () => void,
+): void {
   const id = crypto.randomUUID();
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -42,6 +48,7 @@ function connectClient(req: Request, res: Response, room: string, username: stri
   req.on("close", () => {
     clearInterval(heartbeat);
     clients.delete(id);
+    onClose?.();
   });
 }
 
@@ -51,7 +58,10 @@ export function sseHandler(req: Request, res: Response): void {
 }
 
 export function lobbyConnect(req: Request, res: Response, username: string): void {
-  connectClient(req, res, "lobby", username);
+  connectClient(req, res, "lobby", username, () => {
+    broadcastSse({ type: "user_left" }, { event: "presence", room: "lobby" });
+  });
+  broadcastSse({ type: "user_joined" }, { event: "presence", room: "lobby" });
 }
 
 export function gameConnect(req: Request, res: Response, gameId: number, username: string): void {

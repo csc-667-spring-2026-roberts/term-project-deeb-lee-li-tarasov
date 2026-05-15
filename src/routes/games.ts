@@ -38,6 +38,7 @@ router.get("/games", protectRoute, async (_req, res) => {
 router.post("/games", protectRoute, async (_req, res) => {
   const user = res.locals.currentUser as AuthenticatedUser;
   await createGame(user.id);
+  broadcastSse({ type: "game_created" }, { event: "games", room: "lobby" });
   res.redirect("/games");
 });
 
@@ -58,6 +59,8 @@ router.post("/games/:id/join", protectRoute, async (req, res) => {
     return;
   }
 
+  broadcastSse({ type: "game_joined" }, { event: "games", room: "lobby" });
+  broadcastSse({ type: "player_joined" }, { event: "state", room: `game:${String(gameId)}` });
   res.redirect("/games");
 });
 
@@ -102,6 +105,8 @@ router.post("/games/:id/start", protectRoute, async (req, res) => {
     return;
   }
 
+  broadcastSse({ type: "game_started" }, { event: "games", room: "lobby" });
+  broadcastSse({ type: "game_started" }, { event: "state", room: `game:${String(gameId)}` });
   res.redirect(`/games/${String(gameId)}`);
 });
 

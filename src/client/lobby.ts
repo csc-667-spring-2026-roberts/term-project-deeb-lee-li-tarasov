@@ -72,7 +72,7 @@ const connectSse = (): void => {
     loadOnlineUsers();
   });
 
-  source.addEventListener("state", () => {
+  source.addEventListener("presence", () => {
     loadOnlineUsers();
   });
 

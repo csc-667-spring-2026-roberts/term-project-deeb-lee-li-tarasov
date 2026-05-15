@@ -50,7 +50,7 @@ var connectSse = () => {
     store.setState({ connected: true });
     loadOnlineUsers();
   });
-  source.addEventListener("state", () => {
+  source.addEventListener("presence", () => {
     loadOnlineUsers();
   });
   source.addEventListener("error", () => {

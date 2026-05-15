@@ -600,6 +600,7 @@ async function fetchCurrentTurnState(gameId: number, playerId: number): Promise<
     `SELECT dice_roll_1, dice_roll_2, moved_to_room, action_type
      FROM game_turns
      WHERE game_id = $1 AND player_id = $2
+       AND turn_number = (SELECT MAX(turn_number) FROM game_turns WHERE game_id = $1)
      ORDER BY turn_number DESC LIMIT 1`,
     [gameId, playerId],
   );
