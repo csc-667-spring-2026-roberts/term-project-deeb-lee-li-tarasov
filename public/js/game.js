@@ -20,7 +20,8 @@ async function refreshState() {
 function renderPlayerList(players) {
   const list = document.getElementById("player-list");
   if (!list) return;
-  list.innerHTML = players.map((p) => `
+  list.innerHTML = players.map(
+    (p) => `
     <li class="player-row${p.is_current_turn ? " active-turn" : ""}" data-player-id="${String(p.id)}">
       <div class="player-row-info">
         <span>${p.username}</span>
@@ -28,14 +29,25 @@ function renderPlayerList(players) {
         ${p.room ? `<span class="muted room-label">${p.room}</span>` : ""}
       </div>
       ${p.is_current_turn ? `<span class="turn-badge">Turn</span>` : ""}
-    </li>`).join("");
+    </li>`
+  ).join("");
 }
 function buildRollPanel() {
   return `<div><h2>Your Turn</h2><p class="muted">Roll the dice to begin.</p></div>
           <div><button id="roll-btn">Roll Dice</button></div>`;
 }
 function buildMovePanel(state) {
-  const rooms = ["Kitchen", "Ballroom", "Conservatory", "Billiard Room", "Library", "Study", "Hall", "Lounge", "Dining Room"];
+  const rooms = [
+    "Kitchen",
+    "Ballroom",
+    "Conservatory",
+    "Billiard Room",
+    "Library",
+    "Study",
+    "Hall",
+    "Lounge",
+    "Dining Room"
+  ];
   const opts = rooms.map((r) => `<option value="${r}">${r}</option>`).join("");
   const total = (state.currentTurn?.roll1 ?? 0) + (state.currentTurn?.roll2 ?? 0);
   return `<div><h2>Choose a Room</h2>
@@ -95,9 +107,15 @@ function attachListeners(state) {
     void apiPost(`/api/games/${gameId}/move`, { room }).then(() => void refreshState());
   });
   document.getElementById("suggest-btn")?.addEventListener("click", () => {
-    const suspectCardId = Number(document.getElementById("suspect-select")?.value);
-    const weaponCardId = Number(document.getElementById("weapon-select")?.value);
-    void apiPost(`/api/games/${gameId}/suggest`, { suspectCardId, weaponCardId }).then(() => void refreshState());
+    const suspectCardId = Number(
+      document.getElementById("suspect-select")?.value
+    );
+    const weaponCardId = Number(
+      document.getElementById("weapon-select")?.value
+    );
+    void apiPost(`/api/games/${gameId}/suggest`, { suspectCardId, weaponCardId }).then(
+      () => void refreshState()
+    );
   });
   document.getElementById("end-turn-btn")?.addEventListener("click", () => {
     void apiPost(`/api/games/${gameId}/end-turn`).then(() => void refreshState());
