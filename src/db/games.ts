@@ -342,19 +342,6 @@ export async function movePlayer(
       [gameId, player.id, pos.x, pos.y, room],
     );
 
-    const allPlayers = await t.any<{ id: number }>(
-      "SELECT id FROM game_players WHERE game_id = $1 AND is_eliminated = false ORDER BY turn_order",
-      [gameId],
-    );
-    const currentIndex = allPlayers.findIndex((p) => p.id === player.id);
-    const nextPlayer = allPlayers[(currentIndex + 1) % allPlayers.length];
-    if (!nextPlayer) return "Failed to advance turn.";
-
-    await t.none("UPDATE games SET current_turn_player_id = $1 WHERE id = $2", [
-      nextPlayer.id,
-      gameId,
-    ]);
-
     return null;
   });
 }
@@ -527,6 +514,230 @@ export async function advanceTurn(gameId: number): Promise<string | null> {
     ]);
     return null;
   });
+}
+
+export type GamePhase = "roll" | "move" | "suggest" | "respond" | "wait";
+
+export interface CardInfo {
+  id: number;
+  type: string;
+  name: string;
+}
+
+export interface PlayerState {
+  id: number;
+  username: string;
+  character: string;
+  turn_order: number;
+  is_current_turn: boolean;
+  room: string | null;
+}
+
+export interface TurnState {
+  roll1: number | null;
+  roll2: number | null;
+  moved: boolean;
+  suggested: boolean;
+}
+
+export interface SuggestionState {
+  id: number;
+  suggesting_username: string;
+  suspect_name: string;
+  weapon_name: string;
+  room_name: string;
+  my_turn_to_respond: boolean;
+  eligible_cards: CardInfo[];
+}
+
+export interface FullGameState {
+  game: GameDetail;
+  phase: GamePhase;
+  players: PlayerState[];
+  myPlayerId: number | null;
+  myCards: CardInfo[];
+  currentTurn: TurnState | null;
+  activeSuggestion: SuggestionState | null;
+  allSuspects: CardInfo[];
+  allWeapons: CardInfo[];
+}
+
+async function fetchPlayerStates(
+  gameId: number,
+  currentTurnPlayerId: number | null,
+): Promise<PlayerState[]> {
+  return db.any<PlayerState>(
+    `SELECT gp.id, u.username, gp.character, gp.turn_order,
+            (gp.id = $2) AS is_current_turn,
+            bp.room
+     FROM game_players gp
+     JOIN users u ON u.id = gp.user_id
+     LEFT JOIN board_positions bp ON bp.player_id = gp.id
+     WHERE gp.game_id = $1
+     ORDER BY gp.turn_order`,
+    [gameId, currentTurnPlayerId],
+  );
+}
+
+async function fetchMyCards(gameId: number, playerId: number): Promise<CardInfo[]> {
+  return db.any<CardInfo>(
+    `SELECT c.id, c.type, c.name
+     FROM game_player_cards gpc
+     JOIN cards c ON c.id = gpc.card_id
+     WHERE gpc.game_id = $1 AND gpc.player_id = $2
+     ORDER BY c.type, c.name`,
+    [gameId, playerId],
+  );
+}
+
+async function fetchCurrentTurnState(gameId: number, playerId: number): Promise<TurnState | null> {
+  const turn = await db.oneOrNone<{
+    dice_roll_1: number | null;
+    dice_roll_2: number | null;
+    moved_to_room: string | null;
+    action_type: string;
+  }>(
+    `SELECT dice_roll_1, dice_roll_2, moved_to_room, action_type
+     FROM game_turns
+     WHERE game_id = $1 AND player_id = $2
+     ORDER BY turn_number DESC LIMIT 1`,
+    [gameId, playerId],
+  );
+  if (!turn) return null;
+  return {
+    roll1: turn.dice_roll_1,
+    roll2: turn.dice_roll_2,
+    moved: turn.moved_to_room !== null,
+    suggested: turn.action_type === "suggestion",
+  };
+}
+
+async function fetchActiveSuggestion(
+  gameId: number,
+  myPlayerId: number | null,
+): Promise<SuggestionState | null> {
+  const s = await db.oneOrNone<{
+    id: number;
+    suggesting_player_id: number;
+    suggesting_username: string;
+    suspect_name: string;
+    weapon_name: string;
+    room_name: string;
+    suspect_card_id: number;
+    weapon_card_id: number;
+    room_card_id: number;
+    response_count: number;
+  }>(
+    `SELECT s.id, s.suggesting_player_id,
+            u.username AS suggesting_username,
+            sc.name AS suspect_name, wc.name AS weapon_name, rc.name AS room_name,
+            s.suspect_card_id, s.weapon_card_id, s.room_card_id,
+            (SELECT COUNT(*)::int FROM suggestion_responses WHERE suggestion_id = s.id) AS response_count
+     FROM suggestions s
+     JOIN game_players gp ON gp.id = s.suggesting_player_id
+     JOIN users u ON u.id = gp.user_id
+     JOIN cards sc ON sc.id = s.suspect_card_id
+     JOIN cards wc ON wc.id = s.weapon_card_id
+     JOIN cards rc ON rc.id = s.room_card_id
+     WHERE s.game_id = $1
+       AND gp.id = (SELECT current_turn_player_id FROM games WHERE id = $1)
+       AND NOT EXISTS (
+         SELECT 1 FROM suggestion_responses WHERE suggestion_id = s.id AND card_shown_id IS NOT NULL
+       )
+     ORDER BY s.id DESC LIMIT 1`,
+    [gameId],
+  );
+  if (!s) return null;
+
+  const allPlayers = await db.any<{ id: number }>(
+    "SELECT id FROM game_players WHERE game_id = $1 AND is_eliminated = false ORDER BY turn_order",
+    [gameId],
+  );
+  const responders = getResponders(allPlayers, s.suggesting_player_id);
+  const nextResponder = responders[s.response_count];
+  const myTurnToRespond = myPlayerId !== null && !!nextResponder && nextResponder.id === myPlayerId;
+
+  const eligibleCards = myPlayerId
+    ? await db.any<CardInfo>(
+        `SELECT c.id, c.type, c.name FROM game_player_cards gpc
+         JOIN cards c ON c.id = gpc.card_id
+         WHERE gpc.player_id = $1 AND gpc.card_id IN ($2, $3, $4)`,
+        [myPlayerId, s.suspect_card_id, s.weapon_card_id, s.room_card_id],
+      )
+    : [];
+
+  return {
+    id: s.id,
+    suggesting_username: s.suggesting_username,
+    suspect_name: s.suspect_name,
+    weapon_name: s.weapon_name,
+    room_name: s.room_name,
+    my_turn_to_respond: myTurnToRespond,
+    eligible_cards: eligibleCards,
+  };
+}
+
+function computePhase(
+  isMyTurn: boolean,
+  turnState: TurnState | null,
+  activeSuggestion: SuggestionState | null,
+): GamePhase {
+  if (activeSuggestion) {
+    return activeSuggestion.my_turn_to_respond ? "respond" : "wait";
+  }
+  if (!isMyTurn) return "wait";
+  if (!turnState?.roll1) return "roll";
+  if (!turnState.moved) return "move";
+  if (!turnState.suggested) return "suggest";
+  return "wait";
+}
+
+export async function getGameState(gameId: number, userId: number): Promise<FullGameState | null> {
+  const game = await db.oneOrNone<GameDetail>(
+    "SELECT id, status, max_players, created_by, current_turn_player_id FROM games WHERE id = $1",
+    [gameId],
+  );
+  if (!game) return null;
+
+  const myPlayerRow = await db.oneOrNone<{ id: number }>(
+    "SELECT id FROM game_players WHERE game_id = $1 AND user_id = $2",
+    [gameId, userId],
+  );
+  const myPlayerId = myPlayerRow?.id ?? null;
+  const isMyTurn = myPlayerId !== null && myPlayerId === game.current_turn_player_id;
+
+  const players = await fetchPlayerStates(gameId, game.current_turn_player_id);
+  const myCards = myPlayerId ? await fetchMyCards(gameId, myPlayerId) : [];
+
+  const currentTurn =
+    game.status === "in_progress" && game.current_turn_player_id
+      ? await fetchCurrentTurnState(gameId, game.current_turn_player_id)
+      : null;
+
+  const activeSuggestion =
+    game.status === "in_progress" ? await fetchActiveSuggestion(gameId, myPlayerId) : null;
+
+  const allSuspects = await db.any<CardInfo>(
+    "SELECT id, type, name FROM cards WHERE type = 'suspect' ORDER BY name",
+  );
+  const allWeapons = await db.any<CardInfo>(
+    "SELECT id, type, name FROM cards WHERE type = 'weapon' ORDER BY name",
+  );
+
+  const phase: GamePhase =
+    game.status === "in_progress" ? computePhase(isMyTurn, currentTurn, activeSuggestion) : "wait";
+
+  return {
+    game,
+    phase,
+    players,
+    myPlayerId,
+    myCards,
+    currentTurn,
+    activeSuggestion,
+    allSuspects,
+    allWeapons,
+  };
 }
 
 export async function getGameDetail(gameId: number): Promise<GameWithPlayers | null> {

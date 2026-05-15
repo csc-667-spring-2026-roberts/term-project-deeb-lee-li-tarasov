@@ -1,45 +1,159 @@
 <%- include("../partials/header", { title, currentUser: user }) %>
 
-<div class="card stack wide">
-  <div>
-    <h1>Game #<%= game.id %></h1>
-    <p class="muted">Status: <%= game.status %></p>
-  </div>
+<div data-game-id="<%= state.game.id %>">
 
-  <% if (typeof error !== 'undefined' && error) { %>
-    <p class="error"><%= error %></p>
-  <% } %>
-
-  <% if (game.status === 'lobby') { %>
+<% if (state.game.status === 'lobby') { %>
+  <div class="card stack wide">
+    <div>
+      <h1>Game #<%= state.game.id %></h1>
+      <p class="muted">Waiting for players...</p>
+    </div>
+    <% if (typeof error !== 'undefined' && error) { %><p class="error"><%= error %></p><% } %>
+    <div>
+      <h2>Players</h2>
+      <ul class="player-list">
+        <% for (const p of state.players) { %>
+          <li class="player-row">
+            <div class="player-row-info">
+              <span><%= p.username %></span>
+              <span class="muted"><%= p.character %></span>
+            </div>
+          </li>
+        <% } %>
+      </ul>
+    </div>
     <% if (isCreator) { %>
-      <form method="POST" action="/games/<%= game.id %>/start">
-        <button type="submit">Start Game</button>
+      <% if (state.players.length < 2) { %>
+        <p class="muted">Need at least 2 players to start.</p>
+      <% } %>
+      <form method="POST" action="/games/<%= state.game.id %>/start">
+        <button type="submit"<%= state.players.length < 2 ? ' disabled' : '' %>>Start Game</button>
       </form>
     <% } else { %>
       <p class="muted">Waiting for the host to start...</p>
     <% } %>
-  <% } %>
+    <div><a href="/games">← Back to Game Room</a></div>
+  </div>
 
-  <div>
-    <h2>Players</h2>
-    <ul class="player-list">
-      <% for (const p of players) { %>
-        <li class="player-row<%= p.is_current_turn ? ' active-turn' : '' %>">
-          <div class="player-row-info">
-            <span><%= p.username %></span>
-            <span class="muted"><%= p.character %></span>
-          </div>
-          <% if (p.is_current_turn) { %>
-            <span class="turn-badge">Taking Turn</span>
+<% } else { %>
+
+  <div class="game-layout">
+
+    <div class="game-sidebar card stack">
+      <h2>Players</h2>
+      <ul class="player-list" id="player-list">
+        <% for (const p of state.players) { %>
+          <li class="player-row<%= p.is_current_turn ? ' active-turn' : '' %>" data-player-id="<%= p.id %>">
+            <div class="player-row-info">
+              <span><%= p.username %></span>
+              <span class="muted"><%= p.character %></span>
+              <% if (p.room) { %><span class="muted room-label"><%= p.room %></span><% } %>
+            </div>
+            <% if (p.is_current_turn) { %><span class="turn-badge">Turn</span><% } %>
+          </li>
+        <% } %>
+      </ul>
+
+      <% if (state.myCards.length > 0) { %>
+        <h2>Your Hand</h2>
+        <ul class="card-list">
+          <% for (const c of state.myCards) { %>
+            <li class="card-item" data-card-id="<%= c.id %>">
+              <span class="card-type-badge card-type-<%= c.type %>"><%= c.type %></span>
+              <span><%= c.name %></span>
+            </li>
           <% } %>
-        </li>
+        </ul>
       <% } %>
-    </ul>
+    </div>
+
+    <div class="game-main">
+      <div id="action-panel" class="card stack">
+        <% if (state.phase === 'roll') { %>
+          <div><h2>Your Turn</h2><p class="muted">Roll the dice to begin your turn.</p></div>
+          <div><button id="roll-btn">Roll Dice</button></div>
+
+        <% } else if (state.phase === 'move') { %>
+          <div>
+            <h2>Choose a Room</h2>
+            <p class="muted">You rolled <strong><%= state.currentTurn?.roll1 %> + <%= state.currentTurn?.roll2 %></strong>. Where do you move?</p>
+          </div>
+          <div class="form-group">
+            <label for="room-select">Room</label>
+            <select id="room-select">
+              <% for (const room of ['Kitchen','Ballroom','Conservatory','Billiard Room','Library','Study','Hall','Lounge','Dining Room']) { %>
+                <option value="<%= room %>"><%= room %></option>
+              <% } %>
+            </select>
+          </div>
+          <div><button id="move-btn">Move</button></div>
+
+        <% } else if (state.phase === 'suggest') { %>
+          <% const me = state.players.find(p => p.id === state.myPlayerId); %>
+          <div>
+            <h2>Make a Suggestion</h2>
+            <p class="muted">You are in the <strong><%= me?.room ?? '?' %></strong>. Suggest a suspect and weapon, or end your turn.</p>
+          </div>
+          <div class="form-group">
+            <label for="suspect-select">Suspect</label>
+            <select id="suspect-select">
+              <% for (const s of state.allSuspects) { %>
+                <option value="<%= s.id %>"><%= s.name %></option>
+              <% } %>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="weapon-select">Weapon</label>
+            <select id="weapon-select">
+              <% for (const w of state.allWeapons) { %>
+                <option value="<%= w.id %>"><%= w.name %></option>
+              <% } %>
+            </select>
+          </div>
+          <div class="action-row">
+            <button id="suggest-btn">Make Suggestion</button>
+            <button id="end-turn-btn" class="btn-secondary">End Turn</button>
+          </div>
+
+        <% } else if (state.phase === 'respond') { %>
+          <% const s = state.activeSuggestion; %>
+          <div>
+            <h2>Respond to Suggestion</h2>
+            <p><strong><%= s?.suggesting_username %></strong> suggests <strong><%= s?.suspect_name %></strong> did it in the <strong><%= s?.room_name %></strong> with the <strong><%= s?.weapon_name %></strong>.</p>
+          </div>
+          <% if (s && s.eligible_cards.length > 0) { %>
+            <div>
+              <p class="muted">Show one of your matching cards:</p>
+              <div class="action-row">
+                <% for (const c of s.eligible_cards) { %>
+                  <button class="show-card-btn" data-card-id="<%= c.id %>"><%= c.name %></button>
+                <% } %>
+              </div>
+            </div>
+          <% } %>
+          <div><button id="pass-btn" class="btn-secondary">Pass (I have none)</button></div>
+
+        <% } else { %>
+          <% const currentPlayer = state.players.find(p => p.is_current_turn); %>
+          <div>
+            <h2>Waiting</h2>
+            <% if (state.activeSuggestion) { %>
+              <p class="muted"><strong><%= state.activeSuggestion.suggesting_username %></strong> suggested <strong><%= state.activeSuggestion.suspect_name %></strong> in the <strong><%= state.activeSuggestion.room_name %></strong>. Waiting for responses...</p>
+            <% } else { %>
+              <p class="muted">Waiting for <strong><%= currentPlayer?.username ?? '...' %></strong> to take their turn.</p>
+            <% } %>
+          </div>
+        <% } %>
+      </div>
+    </div>
+
   </div>
 
-  <div>
-    <a href="/games">← Back to Game Room</a>
-  </div>
+<% } %>
+
 </div>
+
+<script>window.__GAME_STATE__ = <%- JSON.stringify(state) %>;</script>
+<script defer src="/js/game.js" type="module"></script>
 
 <%- include("../partials/footer") %>

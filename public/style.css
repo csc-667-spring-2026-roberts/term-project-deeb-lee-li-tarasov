@@ -290,6 +290,75 @@ button[type="submit"] {
   gap: 0.15rem;
 }
 
+.game-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 960px;
+  align-items: start;
+}
+
+.game-sidebar {
+  max-width: 280px;
+}
+
+.game-main {
+  min-width: 0;
+}
+
+.game-main .card {
+  max-width: 100%;
+}
+
+.card-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.card-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+
+.card-type-badge {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 2px;
+  font-variant: normal;
+}
+
+.card-type-suspect { background: #2a1a1a; color: #c07070; }
+.card-type-weapon  { background: #1a1a2a; color: #7070c0; }
+.card-type-room    { background: #1a2a1a; color: #70a070; }
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.btn-secondary {
+  background: var(--border);
+  color: var(--text);
+}
+
+.btn-secondary:hover {
+  background: #3e3e58;
+}
+
+.room-label {
+  font-size: 0.75rem;
+}
+
 .turn-badge {
   font-size: 0.75rem;
   font-variant: small-caps;

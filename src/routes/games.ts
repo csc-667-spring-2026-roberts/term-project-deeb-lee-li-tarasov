@@ -5,7 +5,7 @@ import {
   createGame,
   joinGame,
   startGame,
-  getGameDetail,
+  getGameState,
   rollDice,
   movePlayer,
   makeSuggestion,
@@ -71,18 +71,17 @@ router.get("/games/:id", protectRoute, async (req, res) => {
     return;
   }
 
-  const data = await getGameDetail(gameId);
-  if (!data) {
+  const state = await getGameState(gameId, user.id);
+  if (!state) {
     res.status(404).redirect("/games");
     return;
   }
 
   res.render("games/show", {
     title: `Game #${String(gameId)}`,
-    game: data.game,
-    players: data.players,
+    state,
     user,
-    isCreator: user.id === data.game.created_by,
+    isCreator: user.id === state.game.created_by,
   });
 });
 
@@ -104,6 +103,44 @@ router.post("/games/:id/start", protectRoute, async (req, res) => {
   }
 
   res.redirect(`/games/${String(gameId)}`);
+});
+
+router.get("/api/games/:id/state", protectRoute, async (req, res) => {
+  const user = res.locals.currentUser as AuthenticatedUser;
+  const gameIdStr = req.params["id"];
+  const gameId = Number(gameIdStr);
+  if (!gameIdStr || isNaN(gameId)) {
+    res.status(400).json({ error: "Invalid game id" });
+    return;
+  }
+  const state = await getGameState(gameId, user.id);
+  if (!state) {
+    res.status(404).json({ error: "Game not found" });
+    return;
+  }
+  res.json(state);
+});
+
+router.post("/api/games/:id/end-turn", protectRoute, async (req, res) => {
+  const user = res.locals.currentUser as AuthenticatedUser;
+  const gameIdStr = req.params["id"];
+  const gameId = Number(gameIdStr);
+  if (!gameIdStr || isNaN(gameId)) {
+    res.status(400).json({ error: "Invalid game id" });
+    return;
+  }
+  const state = await getGameState(gameId, user.id);
+  if (!state || state.myPlayerId !== state.game.current_turn_player_id) {
+    res.status(400).json({ error: "It is not your turn." });
+    return;
+  }
+  const error = await advanceTurn(gameId);
+  if (error) {
+    res.status(400).json({ error });
+    return;
+  }
+  broadcastSse({ type: "turn_advanced" }, { event: "state", room: `game:${String(gameId)}` });
+  res.json({ ok: true });
 });
 
 router.get("/api/games/:id/events", protectRoute, (req, res) => {
