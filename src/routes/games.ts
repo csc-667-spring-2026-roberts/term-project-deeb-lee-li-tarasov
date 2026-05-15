@@ -1,6 +1,19 @@
 import { Router } from "express";
 import { protectRoute, type AuthenticatedUser } from "../middleware/auth.js";
-import { listOpenGames, createGame, joinGame, startGame, getGameDetail } from "../db/games.js";
+import {
+  listOpenGames,
+  createGame,
+  joinGame,
+  startGame,
+  getGameDetail,
+  rollDice,
+  movePlayer,
+} from "../db/games.js";
+import { gameConnect, broadcastSse } from "../sse.js";
+
+interface MoveBody {
+  room?: string;
+}
 
 const router = Router();
 
@@ -79,6 +92,56 @@ router.post("/games/:id/start", protectRoute, async (req, res) => {
   }
 
   res.redirect(`/games/${String(gameId)}`);
+});
+
+router.get("/api/games/:id/events", protectRoute, (req, res) => {
+  const user = res.locals.currentUser as AuthenticatedUser;
+  const gameIdStr = req.params["id"];
+  const gameId = Number(gameIdStr);
+  if (!gameIdStr || isNaN(gameId)) {
+    res.status(400).end();
+    return;
+  }
+  gameConnect(req, res, gameId, user.username);
+});
+
+router.post("/api/games/:id/roll", protectRoute, async (req, res) => {
+  const user = res.locals.currentUser as AuthenticatedUser;
+  const gameIdStr = req.params["id"];
+  const gameId = Number(gameIdStr);
+  if (!gameIdStr || isNaN(gameId)) {
+    res.status(400).json({ error: "Invalid game id" });
+    return;
+  }
+  const result = await rollDice(gameId, user.id);
+  if (typeof result === "string") {
+    res.status(400).json({ error: result });
+    return;
+  }
+  broadcastSse({ type: "dice_rolled" }, { event: "state", room: `game:${String(gameId)}` });
+  res.json(result);
+});
+
+router.post("/api/games/:id/move", protectRoute, async (req, res) => {
+  const user = res.locals.currentUser as AuthenticatedUser;
+  const gameIdStr = req.params["id"];
+  const gameId = Number(gameIdStr);
+  if (!gameIdStr || isNaN(gameId)) {
+    res.status(400).json({ error: "Invalid game id" });
+    return;
+  }
+  const { room } = req.body as MoveBody;
+  if (!room) {
+    res.status(400).json({ error: "Room is required" });
+    return;
+  }
+  const error = await movePlayer(gameId, user.id, room);
+  if (error) {
+    res.status(400).json({ error });
+    return;
+  }
+  broadcastSse({ type: "turn_advanced" }, { event: "state", room: `game:${String(gameId)}` });
+  res.json({ ok: true });
 });
 
 export default router;

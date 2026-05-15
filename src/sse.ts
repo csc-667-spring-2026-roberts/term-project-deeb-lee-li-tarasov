@@ -54,6 +54,10 @@ export function lobbyConnect(req: Request, res: Response, username: string): voi
   connectClient(req, res, "lobby", username);
 }
 
+export function gameConnect(req: Request, res: Response, gameId: number, username: string): void {
+  connectClient(req, res, `game:${String(gameId)}`, username);
+}
+
 export function getOnlineUsers(room: string): string[] {
   const result: string[] = [];
   for (const client of clients.values()) {
