@@ -104,6 +104,9 @@
           <% } %>
         </ul>
       <% } %>
+
+      <h2>Notepad</h2>
+      <div id="notepad"></div>
     </div>
 
     <div class="game-main">
@@ -214,6 +217,15 @@
             <% } %>
           </div>
         <% } %>
+      </div>
+    </div>
+
+    <div class="game-chat card stack">
+      <h2>Chat</h2>
+      <ul id="chat-messages" class="chat-messages"></ul>
+      <div class="chat-input-row">
+        <input id="chat-input" type="text" placeholder="Say something..." maxlength="200" autocomplete="off" />
+        <button id="chat-send-btn">Send</button>
       </div>
     </div>
 

@@ -907,3 +907,41 @@ export async function joinGame(gameId: number, userId: number): Promise<string |
     return null;
   });
 }
+
+export interface ChatMessage {
+  id: number;
+  username: string;
+  content: string;
+  created_at: string;
+}
+
+export async function sendChatMessage(
+  gameId: number,
+  userId: number,
+  content: string,
+): Promise<ChatMessage | string> {
+  const player = await db.oneOrNone<{ id: number }>(
+    "SELECT id FROM game_players WHERE game_id = $1 AND user_id = $2",
+    [gameId, userId],
+  );
+  if (!player) return "You are not in this game.";
+
+  return db.one<ChatMessage>(
+    `INSERT INTO game_messages (game_id, player_id, content)
+     VALUES ($1, $2, $3)
+     RETURNING id, (SELECT username FROM users WHERE id = $2) AS username, content, created_at`,
+    [gameId, player.id, content],
+  );
+}
+
+export async function getChatMessages(gameId: number): Promise<ChatMessage[]> {
+  return db.any<ChatMessage>(
+    `SELECT gm.id, u.username, gm.content, gm.created_at
+     FROM game_messages gm
+     JOIN game_players gp ON gp.id = gm.player_id
+     JOIN users u ON u.id = gp.user_id
+     WHERE gm.game_id = $1
+     ORDER BY gm.created_at ASC`,
+    [gameId],
+  );
+}

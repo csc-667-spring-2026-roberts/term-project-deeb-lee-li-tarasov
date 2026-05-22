@@ -207,6 +207,58 @@ function attachListeners(state) {
   });
   void state;
 }
+function loadNotepad() {
+  try {
+    const raw = localStorage.getItem(`notepad_${gameId}`);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+function saveNotepad(data) {
+  localStorage.setItem(`notepad_${gameId}`, JSON.stringify(data));
+}
+function syncHandToNotepad(myCards) {
+  const data = loadNotepad();
+  for (const card of myCards) {
+    data[card.id] = "mine";
+  }
+  saveNotepad(data);
+}
+function renderNotepad(state) {
+  const el = document.getElementById("notepad");
+  if (!el) return;
+  const data = loadNotepad();
+  const groups = [
+    ["Suspects", state.allSuspects],
+    ["Weapons", state.allWeapons],
+    ["Rooms", state.allRooms]
+  ];
+  el.innerHTML = groups.map(([label, cards]) => {
+    const rows = cards.map((c) => {
+      const status = data[c.id] ?? null;
+      const isMine = status === "mine";
+      const isSeen = status === "seen";
+      return `<li class="notepad-row${isMine ? " notepad-mine" : isSeen ? " notepad-seen" : ""}"
+                      data-card-id="${String(c.id)}"
+                      data-locked="${isMine ? "1" : "0"}">
+                    <span class="notepad-name">${c.name}</span>
+                    <span class="notepad-status">${isMine ? "mine" : isSeen ? "seen" : ""}</span>
+                  </li>`;
+    }).join("");
+    return `<div class="notepad-group"><h3 class="notepad-group-label">${label}</h3><ul class="notepad-list">${rows}</ul></div>`;
+  }).join("");
+  el.querySelectorAll(".notepad-row").forEach((row) => {
+    row.addEventListener("click", () => {
+      if (row.dataset["locked"] === "1") return;
+      const cardId = Number(row.dataset["cardId"]);
+      const current = loadNotepad();
+      current[cardId] = current[cardId] === "seen" ? null : "seen";
+      saveNotepad(current);
+      renderNotepad(state);
+    });
+  });
+}
 function renderState(state) {
   const panel = document.getElementById("action-panel");
   if (panel) {
@@ -218,11 +270,53 @@ function renderState(state) {
     boardEl.innerHTML = buildBoard(state);
   }
   renderPlayerList(state.players);
+  syncHandToNotepad(state.myCards);
+  renderNotepad(state);
+}
+function appendChatMessage(msg) {
+  const list = document.getElementById("chat-messages");
+  if (!list) return;
+  const li = document.createElement("li");
+  li.className = "chat-message";
+  li.innerHTML = `<span class="chat-username">${msg.username}</span><span class="chat-content">${msg.content}</span>`;
+  list.appendChild(li);
+  list.scrollTop = list.scrollHeight;
+}
+async function loadChatHistory() {
+  const res = await fetch(`/api/games/${gameId}/chat`);
+  const messages = await res.json();
+  const list = document.getElementById("chat-messages");
+  if (list) list.innerHTML = "";
+  for (const msg of messages) {
+    appendChatMessage(msg);
+  }
+}
+function attachChatListeners() {
+  const input = document.getElementById("chat-input");
+  const btn = document.getElementById("chat-send-btn");
+  const send = () => {
+    const content = input?.value.trim() ?? "";
+    if (!content) return;
+    if (input) input.value = "";
+    void fetch(`/api/games/${gameId}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content })
+    });
+  };
+  btn?.addEventListener("click", send);
+  input?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") send();
+  });
 }
 function connectSse() {
   const source = new EventSource(`/api/games/${gameId}/events`);
   source.addEventListener("state", () => {
     void refreshState();
+  });
+  source.addEventListener("chat", (e) => {
+    const msg = JSON.parse(e.data);
+    appendChatMessage(msg);
   });
   source.addEventListener("error", () => {
     source.close();
@@ -233,6 +327,8 @@ var initialState = window.__GAME_STATE__;
 if (initialState) {
   renderState(initialState);
   if (initialState.game.status === "in_progress") {
+    void loadChatHistory();
+    attachChatListeners();
     connectSse();
   }
 }

@@ -299,6 +299,72 @@ function attachListeners(state: GameState): void {
   void state;
 }
 
+type NotepadStatus = "mine" | "seen" | null;
+type NotepadData = Record<number, NotepadStatus>;
+
+function loadNotepad(): NotepadData {
+  try {
+    const raw = localStorage.getItem(`notepad_${gameId}`);
+    return raw ? (JSON.parse(raw) as NotepadData) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveNotepad(data: NotepadData): void {
+  localStorage.setItem(`notepad_${gameId}`, JSON.stringify(data));
+}
+
+function syncHandToNotepad(myCards: CardInfo[]): void {
+  const data = loadNotepad();
+  for (const card of myCards) {
+    data[card.id] = "mine";
+  }
+  saveNotepad(data);
+}
+
+function renderNotepad(state: GameState): void {
+  const el = document.getElementById("notepad");
+  if (!el) return;
+
+  const data = loadNotepad();
+  const groups: [string, CardInfo[]][] = [
+    ["Suspects", state.allSuspects],
+    ["Weapons", state.allWeapons],
+    ["Rooms", state.allRooms],
+  ];
+
+  el.innerHTML = groups
+    .map(([label, cards]) => {
+      const rows = cards
+        .map((c) => {
+          const status = data[c.id] ?? null;
+          const isMine = status === "mine";
+          const isSeen = status === "seen";
+          return `<li class="notepad-row${isMine ? " notepad-mine" : isSeen ? " notepad-seen" : ""}"
+                      data-card-id="${String(c.id)}"
+                      data-locked="${isMine ? "1" : "0"}">
+                    <span class="notepad-name">${c.name}</span>
+                    <span class="notepad-status">${isMine ? "mine" : isSeen ? "seen" : ""}</span>
+                  </li>`;
+        })
+        .join("");
+      return `<div class="notepad-group"><h3 class="notepad-group-label">${label}</h3><ul class="notepad-list">${rows}</ul></div>`;
+    })
+    .join("");
+
+  el.querySelectorAll(".notepad-row").forEach((row) => {
+    row.addEventListener("click", () => {
+      if ((row as HTMLElement).dataset["locked"] === "1") return;
+      const cardId = Number((row as HTMLElement).dataset["cardId"]);
+      const current = loadNotepad();
+      current[cardId] = current[cardId] === "seen" ? null : "seen";
+      saveNotepad(current);
+      renderNotepad(state);
+    });
+  });
+}
+
 function renderState(state: GameState): void {
   const panel = document.getElementById("action-panel");
   if (panel) {
@@ -310,12 +376,66 @@ function renderState(state: GameState): void {
     boardEl.innerHTML = buildBoard(state);
   }
   renderPlayerList(state.players);
+  syncHandToNotepad(state.myCards);
+  renderNotepad(state);
+}
+
+interface ChatMessage {
+  id: number;
+  username: string;
+  content: string;
+  created_at: string;
+}
+
+function appendChatMessage(msg: ChatMessage): void {
+  const list = document.getElementById("chat-messages");
+  if (!list) return;
+  const li = document.createElement("li");
+  li.className = "chat-message";
+  li.innerHTML = `<span class="chat-username">${msg.username}</span><span class="chat-content">${msg.content}</span>`;
+  list.appendChild(li);
+  list.scrollTop = list.scrollHeight;
+}
+
+async function loadChatHistory(): Promise<void> {
+  const res = await fetch(`/api/games/${gameId}/chat`);
+  const messages = (await res.json()) as ChatMessage[];
+  const list = document.getElementById("chat-messages");
+  if (list) list.innerHTML = "";
+  for (const msg of messages) {
+    appendChatMessage(msg);
+  }
+}
+
+function attachChatListeners(): void {
+  const input = document.getElementById("chat-input") as HTMLInputElement | null;
+  const btn = document.getElementById("chat-send-btn");
+
+  const send = (): void => {
+    const content = input?.value.trim() ?? "";
+    if (!content) return;
+    if (input) input.value = "";
+    void fetch(`/api/games/${gameId}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+  };
+
+  btn?.addEventListener("click", send);
+  input?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") send();
+  });
 }
 
 function connectSse(): void {
   const source = new EventSource(`/api/games/${gameId}/events`);
   source.addEventListener("state", () => {
     void refreshState();
+  });
+  source.addEventListener("chat", (e) => {
+    const msg = JSON.parse((e as MessageEvent<string>).data) as ChatMessage;
+    appendChatMessage(msg);
   });
   source.addEventListener("error", () => {
     source.close();
@@ -327,6 +447,8 @@ const initialState = window.__GAME_STATE__;
 if (initialState) {
   renderState(initialState);
   if (initialState.game.status === "in_progress") {
+    void loadChatHistory();
+    attachChatListeners();
     connectSse();
   }
 }

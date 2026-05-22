@@ -12,6 +12,8 @@ import {
   respondToSuggestion,
   advanceTurn,
   makeAccusation,
+  sendChatMessage,
+  getChatMessages,
 } from "../db/games.js";
 import { gameConnect, broadcastSse } from "../sse.js";
 
@@ -32,6 +34,10 @@ interface AccuseBody {
   suspectCardId?: number;
   weaponCardId?: number;
   roomCardId?: number;
+}
+
+interface ChatBody {
+  content?: string;
 }
 
 const router = Router();
@@ -283,6 +289,39 @@ router.post("/api/games/:id/accuse", protectRoute, async (req, res) => {
     broadcastSse({ type: "player_eliminated" }, { event: "state", room: `game:${String(gameId)}` });
   }
   res.json({ ok: true, correct: result.correct, eliminated: result.eliminated });
+});
+
+router.get("/api/games/:id/chat", protectRoute, async (req, res) => {
+  const gameIdStr = req.params["id"];
+  const gameId = Number(gameIdStr);
+  if (!gameIdStr || isNaN(gameId)) {
+    res.status(400).json({ error: "Invalid game id" });
+    return;
+  }
+  const messages = await getChatMessages(gameId);
+  res.json(messages);
+});
+
+router.post("/api/games/:id/chat", protectRoute, async (req, res) => {
+  const user = res.locals.currentUser as AuthenticatedUser;
+  const gameIdStr = req.params["id"];
+  const gameId = Number(gameIdStr);
+  if (!gameIdStr || isNaN(gameId)) {
+    res.status(400).json({ error: "Invalid game id" });
+    return;
+  }
+  const { content } = req.body as ChatBody;
+  if (!content?.trim()) {
+    res.status(400).json({ error: "Message cannot be empty" });
+    return;
+  }
+  const result = await sendChatMessage(gameId, user.id, content.trim());
+  if (typeof result === "string") {
+    res.status(400).json({ error: result });
+    return;
+  }
+  broadcastSse(result, { event: "chat", room: `game:${String(gameId)}` });
+  res.json({ ok: true });
 });
 
 export default router;
