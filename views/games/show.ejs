@@ -49,13 +49,42 @@
 
   <div class="game-layout">
 
+    <div class="game-board-area card">
+      <h2>Board</h2>
+      <div id="game-board" class="board-grid">
+        <% for (const row of [['Kitchen','Ballroom','Conservatory'],['Billiard Room','Library','Study'],['Hall','Lounge','Dining Room']]) { %>
+          <% for (const room of row) { %>
+            <% const playersInRoom = state.players.filter(p => p.room === room); %>
+            <% const weaponsInRoom = state.weaponPositions.filter(w => w.room_name === room); %>
+            <div class="board-room">
+              <div class="board-room-name"><%= room %></div>
+              <div class="board-tokens">
+                <% for (const p of playersInRoom) { %>
+                  <% const tokenMap = {'Miss Scarlett':'S','Colonel Mustard':'M','Mrs. White':'W','Reverend Green':'G','Mrs. Peacock':'P','Professor Plum':'Pl'}; %>
+                  <% const cssMap = {'Miss Scarlett':'token-scarlett','Colonel Mustard':'token-mustard','Mrs. White':'token-white','Reverend Green':'token-green','Mrs. Peacock':'token-peacock','Professor Plum':'token-plum'}; %>
+                  <span class="token <%= cssMap[p.character] ?? '' %><%= p.is_eliminated ? ' token-eliminated' : '' %>" title="<%= p.username %> (<%= p.character %>)"><%= tokenMap[p.character] ?? '?' %></span>
+                <% } %>
+              </div>
+              <% if (weaponsInRoom.length > 0) { %>
+                <div class="board-weapons">
+                  <% for (const w of weaponsInRoom) { %>
+                    <span class="weapon-token"><%= w.weapon_name %></span>
+                  <% } %>
+                </div>
+              <% } %>
+            </div>
+          <% } %>
+        <% } %>
+      </div>
+    </div>
+
     <div class="game-sidebar card stack">
       <h2>Players</h2>
       <ul class="player-list" id="player-list">
         <% for (const p of state.players) { %>
-          <li class="player-row<%= p.is_current_turn ? ' active-turn' : '' %>" data-player-id="<%= p.id %>">
+          <li class="player-row<%= p.is_current_turn ? ' active-turn' : '' %><%= p.is_eliminated ? ' eliminated' : '' %>" data-player-id="<%= p.id %>">
             <div class="player-row-info">
-              <span><%= p.username %></span>
+              <span><%= p.username %><%= p.is_eliminated ? ' <span class="muted">(out)</span>' : '' %></span>
               <span class="muted"><%= p.character %></span>
               <% if (p.room) { %><span class="muted room-label"><%= p.room %></span><% } %>
             </div>

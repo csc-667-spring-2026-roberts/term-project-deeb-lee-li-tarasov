@@ -608,7 +608,10 @@ export interface PlayerState {
   character: string;
   turn_order: number;
   is_current_turn: boolean;
+  is_eliminated: boolean;
   room: string | null;
+  x: number | null;
+  y: number | null;
 }
 
 export interface TurnState {
@@ -628,6 +631,11 @@ export interface SuggestionState {
   eligible_cards: CardInfo[];
 }
 
+export interface WeaponPosition {
+  weapon_name: string;
+  room_name: string;
+}
+
 export interface FullGameState {
   game: GameDetail;
   phase: GamePhase;
@@ -639,6 +647,7 @@ export interface FullGameState {
   allSuspects: CardInfo[];
   allWeapons: CardInfo[];
   allRooms: CardInfo[];
+  weaponPositions: WeaponPosition[];
   winnerUsername: string | null;
 }
 
@@ -649,7 +658,8 @@ async function fetchPlayerStates(
   return db.any<PlayerState>(
     `SELECT gp.id, u.username, gp.character, gp.turn_order,
             (gp.id = $2) AS is_current_turn,
-            bp.room
+            gp.is_eliminated,
+            bp.room, bp.x, bp.y
      FROM game_players gp
      JOIN users u ON u.id = gp.user_id
      LEFT JOIN board_positions bp ON bp.player_id = gp.id
@@ -808,6 +818,19 @@ export async function getGameState(gameId: number, userId: number): Promise<Full
     "SELECT id, type, name FROM cards WHERE type = 'room' ORDER BY name",
   );
 
+  const weaponPositions =
+    game.status === "in_progress"
+      ? await db.any<WeaponPosition>(
+          `SELECT cw.name AS weapon_name, cr.name AS room_name
+           FROM weapon_positions wp
+           JOIN cards cw ON cw.id = wp.weapon_card_id
+           JOIN cards cr ON cr.id = wp.room_card_id
+           WHERE wp.game_id = $1
+           ORDER BY cw.name`,
+          [gameId],
+        )
+      : [];
+
   const winnerUsername = game.winner_player_id
     ? ((
         await db.oneOrNone<{ username: string }>(
@@ -831,6 +854,7 @@ export async function getGameState(gameId: number, userId: number): Promise<Full
     allSuspects,
     allWeapons,
     allRooms,
+    weaponPositions,
     winnerUsername,
   };
 }

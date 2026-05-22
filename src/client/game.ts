@@ -8,7 +8,10 @@ interface PlayerState {
   username: string;
   character: string;
   is_current_turn: boolean;
+  is_eliminated: boolean;
   room: string | null;
+  x: number | null;
+  y: number | null;
 }
 interface TurnState {
   roll1: number | null;
@@ -24,6 +27,10 @@ interface SuggestionState {
   my_turn_to_respond: boolean;
   eligible_cards: CardInfo[];
 }
+interface WeaponPosition {
+  weapon_name: string;
+  room_name: string;
+}
 interface GameState {
   game: { id: number; status: string };
   phase: string;
@@ -35,6 +42,7 @@ interface GameState {
   allSuspects: CardInfo[];
   allWeapons: CardInfo[];
   allRooms: CardInfo[];
+  weaponPositions: WeaponPosition[];
   winnerUsername: string | null;
 }
 
@@ -43,6 +51,21 @@ declare global {
     __GAME_STATE__: GameState;
   }
 }
+
+const BOARD_ROOMS: string[][] = [
+  ["Kitchen", "Ballroom", "Conservatory"],
+  ["Billiard Room", "Library", "Study"],
+  ["Hall", "Lounge", "Dining Room"],
+];
+
+const CHARACTER_TOKENS: Record<string, { css: string; initial: string }> = {
+  "Miss Scarlett": { css: "token-scarlett", initial: "S" },
+  "Colonel Mustard": { css: "token-mustard", initial: "M" },
+  "Mrs. White": { css: "token-white", initial: "W" },
+  "Reverend Green": { css: "token-green", initial: "G" },
+  "Mrs. Peacock": { css: "token-peacock", initial: "P" },
+  "Professor Plum": { css: "token-plum", initial: "Pl" },
+};
 
 const container = document.querySelector("[data-game-id]") as HTMLElement | null;
 const gameId = container?.dataset["gameId"] ?? "";
@@ -71,9 +94,9 @@ function renderPlayerList(players: PlayerState[]): void {
   list.innerHTML = players
     .map(
       (p) => `
-    <li class="player-row${p.is_current_turn ? " active-turn" : ""}" data-player-id="${String(p.id)}">
+    <li class="player-row${p.is_current_turn ? " active-turn" : ""}${p.is_eliminated ? " eliminated" : ""}" data-player-id="${String(p.id)}">
       <div class="player-row-info">
-        <span>${p.username}</span>
+        <span>${p.username}${p.is_eliminated ? " <span class='muted'>(out)</span>" : ""}</span>
         <span class="muted">${p.character}</span>
         ${p.room ? `<span class="muted room-label">${p.room}</span>` : ""}
       </div>
@@ -81,6 +104,40 @@ function renderPlayerList(players: PlayerState[]): void {
     </li>`,
     )
     .join("");
+}
+
+function buildBoard(state: GameState): string {
+  const playersByRoom: Record<string, PlayerState[]> = {};
+  for (const p of state.players) {
+    if (p.room) {
+      (playersByRoom[p.room] ??= []).push(p);
+    }
+  }
+  const weaponsByRoom: Record<string, string[]> = {};
+  for (const wp of state.weaponPositions) {
+    (weaponsByRoom[wp.room_name] ??= []).push(wp.weapon_name);
+  }
+
+  const cells = BOARD_ROOMS.flat()
+    .map((room) => {
+      const tokens = (playersByRoom[room] ?? [])
+        .map((p) => {
+          const tok = CHARACTER_TOKENS[p.character] ?? { css: "token-default", initial: "?" };
+          return `<span class="token ${tok.css}${p.is_eliminated ? " token-eliminated" : ""}" title="${p.username} (${p.character})">${tok.initial}</span>`;
+        })
+        .join("");
+      const weapons = (weaponsByRoom[room] ?? [])
+        .map((w) => `<span class="weapon-token">${w}</span>`)
+        .join("");
+      return `<div class="board-room">
+        <div class="board-room-name">${room}</div>
+        <div class="board-tokens">${tokens}</div>
+        ${weapons ? `<div class="board-weapons">${weapons}</div>` : ""}
+      </div>`;
+    })
+    .join("");
+
+  return `<div class="board-grid">${cells}</div>`;
 }
 
 function buildRollPanel(): string {
@@ -247,6 +304,10 @@ function renderState(state: GameState): void {
   if (panel) {
     panel.innerHTML = buildActionPanel(state);
     attachListeners(state);
+  }
+  const boardEl = document.getElementById("game-board");
+  if (boardEl) {
+    boardEl.innerHTML = buildBoard(state);
   }
   renderPlayerList(state.players);
 }

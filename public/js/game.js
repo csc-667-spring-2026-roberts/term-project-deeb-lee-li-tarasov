@@ -1,4 +1,17 @@
 // src/client/game.ts
+var BOARD_ROOMS = [
+  ["Kitchen", "Ballroom", "Conservatory"],
+  ["Billiard Room", "Library", "Study"],
+  ["Hall", "Lounge", "Dining Room"]
+];
+var CHARACTER_TOKENS = {
+  "Miss Scarlett": { css: "token-scarlett", initial: "S" },
+  "Colonel Mustard": { css: "token-mustard", initial: "M" },
+  "Mrs. White": { css: "token-white", initial: "W" },
+  "Reverend Green": { css: "token-green", initial: "G" },
+  "Mrs. Peacock": { css: "token-peacock", initial: "P" },
+  "Professor Plum": { css: "token-plum", initial: "Pl" }
+};
 var container = document.querySelector("[data-game-id]");
 var gameId = container?.dataset["gameId"] ?? "";
 async function apiPost(path, body) {
@@ -22,15 +35,41 @@ function renderPlayerList(players) {
   if (!list) return;
   list.innerHTML = players.map(
     (p) => `
-    <li class="player-row${p.is_current_turn ? " active-turn" : ""}" data-player-id="${String(p.id)}">
+    <li class="player-row${p.is_current_turn ? " active-turn" : ""}${p.is_eliminated ? " eliminated" : ""}" data-player-id="${String(p.id)}">
       <div class="player-row-info">
-        <span>${p.username}</span>
+        <span>${p.username}${p.is_eliminated ? " <span class='muted'>(out)</span>" : ""}</span>
         <span class="muted">${p.character}</span>
         ${p.room ? `<span class="muted room-label">${p.room}</span>` : ""}
       </div>
       ${p.is_current_turn ? `<span class="turn-badge">Turn</span>` : ""}
     </li>`
   ).join("");
+}
+function buildBoard(state) {
+  var _a, _b;
+  const playersByRoom = {};
+  for (const p of state.players) {
+    if (p.room) {
+      (playersByRoom[_a = p.room] ?? (playersByRoom[_a] = [])).push(p);
+    }
+  }
+  const weaponsByRoom = {};
+  for (const wp of state.weaponPositions) {
+    (weaponsByRoom[_b = wp.room_name] ?? (weaponsByRoom[_b] = [])).push(wp.weapon_name);
+  }
+  const cells = BOARD_ROOMS.flat().map((room) => {
+    const tokens = (playersByRoom[room] ?? []).map((p) => {
+      const tok = CHARACTER_TOKENS[p.character] ?? { css: "token-default", initial: "?" };
+      return `<span class="token ${tok.css}${p.is_eliminated ? " token-eliminated" : ""}" title="${p.username} (${p.character})">${tok.initial}</span>`;
+    }).join("");
+    const weapons = (weaponsByRoom[room] ?? []).map((w) => `<span class="weapon-token">${w}</span>`).join("");
+    return `<div class="board-room">
+        <div class="board-room-name">${room}</div>
+        <div class="board-tokens">${tokens}</div>
+        ${weapons ? `<div class="board-weapons">${weapons}</div>` : ""}
+      </div>`;
+  }).join("");
+  return `<div class="board-grid">${cells}</div>`;
 }
 function buildRollPanel() {
   return `<div><h2>Your Turn</h2><p class="muted">Roll the dice to begin.</p></div>
@@ -173,6 +212,10 @@ function renderState(state) {
   if (panel) {
     panel.innerHTML = buildActionPanel(state);
     attachListeners(state);
+  }
+  const boardEl = document.getElementById("game-board");
+  if (boardEl) {
+    boardEl.innerHTML = buildBoard(state);
   }
   renderPlayerList(state.players);
 }

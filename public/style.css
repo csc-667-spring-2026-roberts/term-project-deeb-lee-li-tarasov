@@ -292,15 +292,20 @@ button[type="submit"] {
 
 .game-layout {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 220px 1fr 240px;
+  grid-template-rows: auto auto;
   gap: 1.5rem;
   width: 100%;
-  max-width: 960px;
+  max-width: 1100px;
   align-items: start;
 }
 
+.game-board-area {
+  grid-column: 1 / -1;
+}
+
 .game-sidebar {
-  max-width: 280px;
+  min-width: 0;
 }
 
 .game-main {
@@ -309,6 +314,76 @@ button[type="submit"] {
 
 .game-main .card {
   max-width: 100%;
+}
+
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  margin-top: 0.75rem;
+}
+
+.board-room {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 0.5rem;
+  min-height: 90px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.board-room-name {
+  font-size: 0.68rem;
+  font-variant: small-caps;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.board-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.board-weapons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: auto;
+}
+
+.token {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: bold;
+  cursor: default;
+}
+
+.token-scarlett  { background: #c0392b; color: #fff; }
+.token-mustard   { background: #d4a017; color: #000; }
+.token-white     { background: #ddd; color: #000; }
+.token-green     { background: #27ae60; color: #fff; }
+.token-peacock   { background: #2980b9; color: #fff; }
+.token-plum      { background: #8e44ad; color: #fff; }
+.token-eliminated { opacity: 0.35; }
+
+.weapon-token {
+  font-size: 0.6rem;
+  color: var(--muted);
+  background: #1a1a2a;
+  padding: 1px 4px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.player-row.eliminated {
+  opacity: 0.5;
 }
 
 .card-list {
