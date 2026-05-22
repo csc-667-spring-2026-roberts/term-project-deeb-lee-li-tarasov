@@ -52,10 +52,16 @@ declare global {
   }
 }
 
-const BOARD_ROOMS: string[][] = [
-  ["Kitchen", "Ballroom", "Conservatory"],
-  ["Billiard Room", "Library", "Study"],
-  ["Hall", "Lounge", "Dining Room"],
+const BOARD_LAYOUT: (string | null)[][] = [
+  ["Kitchen", null, null, null, "Ballroom", null, null, null, "Conservatory"],
+  [null, null, null, null, null, null, null, null, null],
+  [null, null, null, null, null, null, null, null, null],
+  [null, null, null, null, null, null, null, null, null],
+  ["Billiard Room", null, null, null, "Library", null, null, null, "Study"],
+  [null, null, null, null, null, null, null, null, null],
+  [null, null, null, null, null, null, null, null, null],
+  [null, null, null, null, null, null, null, null, null],
+  ["Hall", null, null, null, "Lounge", null, null, null, "Dining Room"],
 ];
 
 const CHARACTER_TOKENS: Record<string, { css: string; initial: string }> = {
@@ -118,8 +124,9 @@ function buildBoard(state: GameState): string {
     (weaponsByRoom[wp.room_name] ??= []).push(wp.weapon_name);
   }
 
-  const cells = BOARD_ROOMS.flat()
+  const cells = BOARD_LAYOUT.flat()
     .map((room) => {
+      if (!room) return `<div class="board-corridor"></div>`;
       const tokens = (playersByRoom[room] ?? [])
         .map((p) => {
           const tok = CHARACTER_TOKENS[p.character] ?? { css: "token-default", initial: "?" };

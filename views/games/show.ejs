@@ -52,27 +52,44 @@
     <div class="game-board-area card">
       <h2>Board</h2>
       <div id="game-board" class="board-grid">
-        <% for (const row of [['Kitchen','Ballroom','Conservatory'],['Billiard Room','Library','Study'],['Hall','Lounge','Dining Room']]) { %>
-          <% for (const room of row) { %>
-            <% const playersInRoom = state.players.filter(p => p.room === room); %>
-            <% const weaponsInRoom = state.weaponPositions.filter(w => w.room_name === room); %>
-            <div class="board-room">
-              <div class="board-room-name"><%= room %></div>
-              <div class="board-tokens">
-                <% for (const p of playersInRoom) { %>
-                  <% const tokenMap = {'Miss Scarlett':'S','Colonel Mustard':'M','Mrs. White':'W','Reverend Green':'G','Mrs. Peacock':'P','Professor Plum':'Pl'}; %>
-                  <% const cssMap = {'Miss Scarlett':'token-scarlett','Colonel Mustard':'token-mustard','Mrs. White':'token-white','Reverend Green':'token-green','Mrs. Peacock':'token-peacock','Professor Plum':'token-plum'}; %>
-                  <span class="token <%= cssMap[p.character] ?? '' %><%= p.is_eliminated ? ' token-eliminated' : '' %>" title="<%= p.username %> (<%= p.character %>)"><%= tokenMap[p.character] ?? '?' %></span>
-                <% } %>
-              </div>
-              <% if (weaponsInRoom.length > 0) { %>
-                <div class="board-weapons">
-                  <% for (const w of weaponsInRoom) { %>
-                    <span class="weapon-token"><%= w.weapon_name %></span>
+        <%
+          const tokenMap = {'Miss Scarlett':'S','Colonel Mustard':'M','Mrs. White':'W','Reverend Green':'G','Mrs. Peacock':'P','Professor Plum':'Pl'};
+          const cssMap = {'Miss Scarlett':'token-scarlett','Colonel Mustard':'token-mustard','Mrs. White':'token-white','Reverend Green':'token-green','Mrs. Peacock':'token-peacock','Professor Plum':'token-plum'};
+          const boardLayout = [
+            ['Kitchen', null, null, null, 'Ballroom', null, null, null, 'Conservatory'],
+            [null, null, null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null, null, null],
+            ['Billiard Room', null, null, null, 'Library', null, null, null, 'Study'],
+            [null, null, null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null, null, null],
+            ['Hall', null, null, null, 'Lounge', null, null, null, 'Dining Room'],
+          ];
+        %>
+        <% for (const row of boardLayout) { %>
+          <% for (const cell of row) { %>
+            <% if (!cell) { %>
+              <div class="board-corridor"></div>
+            <% } else { %>
+              <% const playersInRoom = state.players.filter(p => p.room === cell); %>
+              <% const weaponsInRoom = state.weaponPositions.filter(w => w.room_name === cell); %>
+              <div class="board-room">
+                <div class="board-room-name"><%= cell %></div>
+                <div class="board-tokens">
+                  <% for (const p of playersInRoom) { %>
+                    <span class="token <%= cssMap[p.character] ?? '' %><%= p.is_eliminated ? ' token-eliminated' : '' %>" title="<%= p.username %> (<%= p.character %>)"><%= tokenMap[p.character] ?? '?' %></span>
                   <% } %>
                 </div>
-              <% } %>
-            </div>
+                <% if (weaponsInRoom.length > 0) { %>
+                  <div class="board-weapons">
+                    <% for (const w of weaponsInRoom) { %>
+                      <span class="weapon-token"><%= w.weapon_name %></span>
+                    <% } %>
+                  </div>
+                <% } %>
+              </div>
+            <% } %>
           <% } %>
         <% } %>
       </div>

@@ -1,8 +1,14 @@
 // src/client/game.ts
-var BOARD_ROOMS = [
-  ["Kitchen", "Ballroom", "Conservatory"],
-  ["Billiard Room", "Library", "Study"],
-  ["Hall", "Lounge", "Dining Room"]
+var BOARD_LAYOUT = [
+  ["Kitchen", null, null, null, "Ballroom", null, null, null, "Conservatory"],
+  [null, null, null, null, null, null, null, null, null],
+  [null, null, null, null, null, null, null, null, null],
+  [null, null, null, null, null, null, null, null, null],
+  ["Billiard Room", null, null, null, "Library", null, null, null, "Study"],
+  [null, null, null, null, null, null, null, null, null],
+  [null, null, null, null, null, null, null, null, null],
+  [null, null, null, null, null, null, null, null, null],
+  ["Hall", null, null, null, "Lounge", null, null, null, "Dining Room"]
 ];
 var CHARACTER_TOKENS = {
   "Miss Scarlett": { css: "token-scarlett", initial: "S" },
@@ -57,7 +63,8 @@ function buildBoard(state) {
   for (const wp of state.weaponPositions) {
     (weaponsByRoom[_b = wp.room_name] ?? (weaponsByRoom[_b] = [])).push(wp.weapon_name);
   }
-  const cells = BOARD_ROOMS.flat().map((room) => {
+  const cells = BOARD_LAYOUT.flat().map((room) => {
+    if (!room) return `<div class="board-corridor"></div>`;
     const tokens = (playersByRoom[room] ?? []).map((p) => {
       const tok = CHARACTER_TOKENS[p.character] ?? { css: "token-default", initial: "?" };
       return `<span class="token ${tok.css}${p.is_eliminated ? " token-eliminated" : ""}" title="${p.username} (${p.character})">${tok.initial}</span>`;
