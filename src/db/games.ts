@@ -85,6 +85,7 @@ export interface GameDetail {
   max_players: number;
   created_by: number;
   current_turn_player_id: number | null;
+  winner_player_id: number | null;
 }
 
 export interface GamePlayerDetail {
@@ -492,6 +493,83 @@ export async function respondToSuggestion(
   });
 }
 
+export async function makeAccusation(
+  gameId: number,
+  userId: number,
+  suspectCardId: number,
+  weaponCardId: number,
+  roomCardId: number,
+): Promise<{ correct: boolean; eliminated: boolean } | string> {
+  return db.tx(async (t) => {
+    const game = await t.oneOrNone<{ status: string; current_turn_player_id: number | null }>(
+      "SELECT status, current_turn_player_id FROM games WHERE id = $1",
+      [gameId],
+    );
+    if (!game || game.status !== "in_progress") return "Game not in progress.";
+
+    const player = await t.oneOrNone<{ id: number }>(
+      "SELECT id FROM game_players WHERE game_id = $1 AND user_id = $2 AND is_eliminated = false",
+      [gameId, userId],
+    );
+    if (!player) return "You are not an active player in this game.";
+
+    const solution = await t.oneOrNone<{
+      suspect_card_id: number;
+      weapon_card_id: number;
+      room_card_id: number;
+    }>(
+      "SELECT suspect_card_id, weapon_card_id, room_card_id FROM game_solutions WHERE game_id = $1",
+      [gameId],
+    );
+    if (!solution) return "Game solution not found.";
+
+    const correct =
+      solution.suspect_card_id === suspectCardId &&
+      solution.weapon_card_id === weaponCardId &&
+      solution.room_card_id === roomCardId;
+
+    if (correct) {
+      await t.none("UPDATE games SET status = 'finished', winner_player_id = $1 WHERE id = $2", [
+        player.id,
+        gameId,
+      ]);
+      return { correct: true, eliminated: false };
+    }
+
+    await t.none("UPDATE game_players SET is_eliminated = true WHERE id = $1", [player.id]);
+
+    const remaining = await t.one<{ count: number }>(
+      "SELECT COUNT(*)::int AS count FROM game_players WHERE game_id = $1 AND is_eliminated = false",
+      [gameId],
+    );
+
+    if (remaining.count === 1) {
+      const lastPlayer = await t.one<{ id: number }>(
+        "SELECT id FROM game_players WHERE game_id = $1 AND is_eliminated = false",
+        [gameId],
+      );
+      await t.none("UPDATE games SET status = 'finished', winner_player_id = $1 WHERE id = $2", [
+        lastPlayer.id,
+        gameId,
+      ]);
+    } else if (game.current_turn_player_id === player.id) {
+      const allPlayers = await t.any<{ id: number }>(
+        "SELECT id FROM game_players WHERE game_id = $1 AND is_eliminated = false ORDER BY turn_order",
+        [gameId],
+      );
+      const nextPlayer = allPlayers[0];
+      if (nextPlayer) {
+        await t.none("UPDATE games SET current_turn_player_id = $1 WHERE id = $2", [
+          nextPlayer.id,
+          gameId,
+        ]);
+      }
+    }
+
+    return { correct: false, eliminated: true };
+  });
+}
+
 export async function advanceTurn(gameId: number): Promise<string | null> {
   return db.tx(async (t) => {
     const game = await t.oneOrNone<{ current_turn_player_id: number | null }>(
@@ -560,6 +638,8 @@ export interface FullGameState {
   activeSuggestion: SuggestionState | null;
   allSuspects: CardInfo[];
   allWeapons: CardInfo[];
+  allRooms: CardInfo[];
+  winnerUsername: string | null;
 }
 
 async function fetchPlayerStates(
@@ -695,7 +775,7 @@ function computePhase(
 
 export async function getGameState(gameId: number, userId: number): Promise<FullGameState | null> {
   const game = await db.oneOrNone<GameDetail>(
-    "SELECT id, status, max_players, created_by, current_turn_player_id FROM games WHERE id = $1",
+    "SELECT id, status, max_players, created_by, current_turn_player_id, winner_player_id FROM games WHERE id = $1",
     [gameId],
   );
   if (!game) return null;
@@ -724,6 +804,18 @@ export async function getGameState(gameId: number, userId: number): Promise<Full
   const allWeapons = await db.any<CardInfo>(
     "SELECT id, type, name FROM cards WHERE type = 'weapon' ORDER BY name",
   );
+  const allRooms = await db.any<CardInfo>(
+    "SELECT id, type, name FROM cards WHERE type = 'room' ORDER BY name",
+  );
+
+  const winnerUsername = game.winner_player_id
+    ? ((
+        await db.oneOrNone<{ username: string }>(
+          "SELECT u.username FROM game_players gp JOIN users u ON u.id = gp.user_id WHERE gp.id = $1",
+          [game.winner_player_id],
+        )
+      )?.username ?? null)
+    : null;
 
   const phase: GamePhase =
     game.status === "in_progress" ? computePhase(isMyTurn, currentTurn, activeSuggestion) : "wait";
@@ -738,6 +830,8 @@ export async function getGameState(gameId: number, userId: number): Promise<Full
     activeSuggestion,
     allSuspects,
     allWeapons,
+    allRooms,
+    winnerUsername,
   };
 }
 

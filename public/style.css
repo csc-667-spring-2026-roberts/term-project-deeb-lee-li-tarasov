@@ -365,3 +365,30 @@ button[type="submit"] {
   letter-spacing: 0.06em;
   color: var(--accent-hover);
 }
+
+.btn-danger {
+  background: #7a1a1a;
+  color: var(--text);
+}
+
+.btn-danger:hover {
+  background: #9a2020;
+}
+
+.accuse-section {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.accuse-section summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  user-select: none;
+}
+
+.accuse-section .stack {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}

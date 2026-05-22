@@ -11,6 +11,7 @@ import {
   makeSuggestion,
   respondToSuggestion,
   advanceTurn,
+  makeAccusation,
 } from "../db/games.js";
 import { gameConnect, broadcastSse } from "../sse.js";
 
@@ -25,6 +26,12 @@ interface SuggestBody {
 
 interface RespondBody {
   cardId?: number | null;
+}
+
+interface AccuseBody {
+  suspectCardId?: number;
+  weaponCardId?: number;
+  roomCardId?: number;
 }
 
 const router = Router();
@@ -250,6 +257,32 @@ router.post("/api/games/:id/respond", protectRoute, async (req, res) => {
     broadcastSse({ type: "response_needed" }, { event: "state", room: `game:${String(gameId)}` });
   }
   res.json({ ok: true, done: result.done });
+});
+
+router.post("/api/games/:id/accuse", protectRoute, async (req, res) => {
+  const user = res.locals.currentUser as AuthenticatedUser;
+  const gameIdStr = req.params["id"];
+  const gameId = Number(gameIdStr);
+  if (!gameIdStr || isNaN(gameId)) {
+    res.status(400).json({ error: "Invalid game id" });
+    return;
+  }
+  const { suspectCardId, weaponCardId, roomCardId } = req.body as AccuseBody;
+  if (!suspectCardId || !weaponCardId || !roomCardId) {
+    res.status(400).json({ error: "suspectCardId, weaponCardId, and roomCardId are required" });
+    return;
+  }
+  const result = await makeAccusation(gameId, user.id, suspectCardId, weaponCardId, roomCardId);
+  if (typeof result === "string") {
+    res.status(400).json({ error: result });
+    return;
+  }
+  if (result.correct) {
+    broadcastSse({ type: "game_over" }, { event: "state", room: `game:${String(gameId)}` });
+  } else {
+    broadcastSse({ type: "player_eliminated" }, { event: "state", room: `game:${String(gameId)}` });
+  }
+  res.json({ ok: true, correct: result.correct, eliminated: result.eliminated });
 });
 
 export default router;

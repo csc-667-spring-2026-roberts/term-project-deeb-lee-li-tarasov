@@ -34,6 +34,8 @@ interface GameState {
   activeSuggestion: SuggestionState | null;
   allSuspects: CardInfo[];
   allWeapons: CardInfo[];
+  allRooms: CardInfo[];
+  winnerUsername: string | null;
 }
 
 declare global {
@@ -106,6 +108,28 @@ function buildMovePanel(state: GameState): string {
           <div><button id="move-btn">Move</button></div>`;
 }
 
+function buildAccuseSection(state: GameState): string {
+  const suspects = state.allSuspects
+    .map((s) => `<option value="${String(s.id)}">${s.name}</option>`)
+    .join("");
+  const weapons = state.allWeapons
+    .map((w) => `<option value="${String(w.id)}">${w.name}</option>`)
+    .join("");
+  const rooms = state.allRooms
+    .map((r) => `<option value="${String(r.id)}">${r.name}</option>`)
+    .join("");
+  return `<details class="accuse-section">
+            <summary class="muted">Make an Accusation</summary>
+            <div class="stack">
+              <p class="muted">Warning: a wrong accusation eliminates you.</p>
+              <div class="form-group"><label>Suspect</label><select id="accuse-suspect-select">${suspects}</select></div>
+              <div class="form-group"><label>Weapon</label><select id="accuse-weapon-select">${weapons}</select></div>
+              <div class="form-group"><label>Room</label><select id="accuse-room-select">${rooms}</select></div>
+              <div><button id="accuse-btn" class="btn-danger">Accuse</button></div>
+            </div>
+          </details>`;
+}
+
 function buildSuggestPanel(state: GameState): string {
   const me = state.players.find((p) => p.id === state.myPlayerId);
   const suspects = state.allSuspects
@@ -121,7 +145,8 @@ function buildSuggestPanel(state: GameState): string {
           <div class="action-row">
             <button id="suggest-btn">Make Suggestion</button>
             <button id="end-turn-btn" class="btn-secondary">End Turn</button>
-          </div>`;
+          </div>
+          ${buildAccuseSection(state)}`;
 }
 
 function buildRespondPanel(s: SuggestionState): string {
@@ -144,7 +169,15 @@ function buildWaitPanel(state: GameState): string {
   return `<div><h2>Waiting</h2><p class="muted">Waiting for <strong>${current?.username ?? "..."}</strong>.</p></div>`;
 }
 
+function buildFinishedPanel(state: GameState): string {
+  const me = state.players.find((p) => p.id === state.myPlayerId);
+  const won = state.winnerUsername === me?.username;
+  return `<div><h2>${won ? "You Win!" : "Game Over"}</h2>
+          <p class="muted"><strong>${state.winnerUsername ?? "Someone"}</strong> solved the mystery.</p></div>`;
+}
+
 function buildActionPanel(state: GameState): string {
+  if (state.game.status === "finished") return buildFinishedPanel(state);
   switch (state.phase) {
     case "roll":
       return buildRollPanel();
@@ -186,6 +219,20 @@ function attachListeners(state: GameState): void {
   document.getElementById("pass-btn")?.addEventListener("click", () => {
     void apiPost(`/api/games/${gameId}/respond`, { cardId: null }).then(() => void refreshState());
   });
+  document.getElementById("accuse-btn")?.addEventListener("click", () => {
+    const suspectCardId = Number(
+      (document.getElementById("accuse-suspect-select") as HTMLSelectElement | null)?.value,
+    );
+    const weaponCardId = Number(
+      (document.getElementById("accuse-weapon-select") as HTMLSelectElement | null)?.value,
+    );
+    const roomCardId = Number(
+      (document.getElementById("accuse-room-select") as HTMLSelectElement | null)?.value,
+    );
+    void apiPost(`/api/games/${gameId}/accuse`, { suspectCardId, weaponCardId, roomCardId }).then(
+      () => void refreshState(),
+    );
+  });
   document.querySelectorAll(".show-card-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const cardId = Number((btn as HTMLElement).dataset["cardId"]);
@@ -216,7 +263,9 @@ function connectSse(): void {
 }
 
 const initialState = window.__GAME_STATE__;
-if (initialState?.game.status === "in_progress") {
+if (initialState) {
   renderState(initialState);
-  connectSse();
+  if (initialState.game.status === "in_progress") {
+    connectSse();
+  }
 }

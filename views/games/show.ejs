@@ -35,6 +35,16 @@
     <div><a href="/games">← Back to Game Room</a></div>
   </div>
 
+<% } else if (state.game.status === 'finished') { %>
+
+  <div class="card stack wide">
+    <div>
+      <h1>Game Over</h1>
+      <p><strong><%= state.winnerUsername %></strong> solved the mystery.</p>
+    </div>
+    <div><a href="/games">← Back to Game Room</a></div>
+  </div>
+
 <% } else { %>
 
   <div class="game-layout">
@@ -114,6 +124,37 @@
             <button id="suggest-btn">Make Suggestion</button>
             <button id="end-turn-btn" class="btn-secondary">End Turn</button>
           </div>
+          <details class="accuse-section">
+            <summary class="muted">Make an Accusation</summary>
+            <div class="stack">
+              <p class="muted">Warning: a wrong accusation eliminates you from the game.</p>
+              <div class="form-group">
+                <label for="accuse-suspect-select">Suspect</label>
+                <select id="accuse-suspect-select">
+                  <% for (const s of state.allSuspects) { %>
+                    <option value="<%= s.id %>"><%= s.name %></option>
+                  <% } %>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="accuse-weapon-select">Weapon</label>
+                <select id="accuse-weapon-select">
+                  <% for (const w of state.allWeapons) { %>
+                    <option value="<%= w.id %>"><%= w.name %></option>
+                  <% } %>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="accuse-room-select">Room</label>
+                <select id="accuse-room-select">
+                  <% for (const r of state.allRooms) { %>
+                    <option value="<%= r.id %>"><%= r.name %></option>
+                  <% } %>
+                </select>
+              </div>
+              <div><button id="accuse-btn" class="btn-danger">Accuse</button></div>
+            </div>
+          </details>
 
         <% } else if (state.phase === 'respond') { %>
           <% const s = state.activeSuggestion; %>
