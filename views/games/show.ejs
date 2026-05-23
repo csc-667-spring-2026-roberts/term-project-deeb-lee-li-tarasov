@@ -140,19 +140,39 @@
           <div><button id="roll-btn">Roll Dice</button></div>
 
         <% } else if (state.phase === 'move') { %>
+          <%
+            const allRooms = ['Kitchen','Ballroom','Conservatory','Billiard Room','Library','Study','Hall','Lounge','Dining Room'];
+            const roomCoords = {Kitchen:{x:4,y:4},Ballroom:{x:12,y:2},Conservatory:{x:20,y:4},'Billiard Room':{x:4,y:12},Library:{x:12,y:12},Study:{x:20,y:12},Hall:{x:4,y:20},Lounge:{x:12,y:20},'Dining Room':{x:20,y:20}};
+            const me2 = state.players.find(p => p.id === state.myPlayerId);
+            const currentRoom = me2?.room ?? null;
+            const diceTotal = (state.currentTurn?.roll1 ?? 0) + (state.currentTurn?.roll2 ?? 0);
+            const reachable = currentRoom
+              ? allRooms.filter(r => {
+                  if (r === currentRoom) return false;
+                  const a = roomCoords[currentRoom]; const b = roomCoords[r];
+                  if (!a || !b) return true;
+                  return Math.ceil((Math.abs(a.x - b.x) + Math.abs(a.y - b.y)) / 4) <= diceTotal;
+                })
+              : allRooms;
+          %>
           <div>
             <h2>Choose a Room</h2>
-            <p class="muted">You rolled <strong><%= state.currentTurn?.roll1 %> + <%= state.currentTurn?.roll2 %></strong>. Where do you move?</p>
+            <p class="muted">You rolled <strong><%= state.currentTurn?.roll1 %> + <%= state.currentTurn?.roll2 %> = <%= diceTotal %></strong>. Where do you move?</p>
           </div>
-          <div class="form-group">
-            <label for="room-select">Room</label>
-            <select id="room-select">
-              <% for (const room of ['Kitchen','Ballroom','Conservatory','Billiard Room','Library','Study','Hall','Lounge','Dining Room']) { %>
-                <option value="<%= room %>"><%= room %></option>
-              <% } %>
-            </select>
-          </div>
-          <div><button id="move-btn">Move</button></div>
+          <% if (reachable.length === 0) { %>
+            <p class="muted">Not enough to reach any room.</p>
+            <div><button id="end-turn-btn" class="btn-secondary">End Turn</button></div>
+          <% } else { %>
+            <div class="form-group">
+              <label for="room-select">Room</label>
+              <select id="room-select">
+                <% for (const room of reachable) { %>
+                  <option value="<%= room %>"><%= room %></option>
+                <% } %>
+              </select>
+            </div>
+            <div><button id="move-btn">Move</button></div>
+          <% } %>
 
         <% } else if (state.phase === 'suggest') { %>
           <% const me = state.players.find(p => p.id === state.myPlayerId); %>

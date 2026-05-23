@@ -302,6 +302,9 @@ button[type="submit"] {
 
 .game-board-area {
   grid-column: 1 / -1;
+  align-self: start;
+  max-height: 600px;
+
 }
 
 .game-sidebar {
