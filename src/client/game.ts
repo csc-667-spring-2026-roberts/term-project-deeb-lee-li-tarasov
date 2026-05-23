@@ -10,8 +10,7 @@ interface PlayerState {
   is_current_turn: boolean;
   is_eliminated: boolean;
   room: string | null;
-  x: number | null;
-  y: number | null;
+  track_pos: number | null;
 }
 interface TurnState {
   roll1: number | null;
@@ -52,23 +51,61 @@ declare global {
   }
 }
 
-const ROOM_COORDS: Record<string, { x: number; y: number }> = {
-  Kitchen: { x: 4, y: 4 },
-  Ballroom: { x: 12, y: 2 },
-  Conservatory: { x: 20, y: 4 },
-  "Billiard Room": { x: 4, y: 12 },
-  Library: { x: 12, y: 12 },
-  Study: { x: 20, y: 12 },
-  Hall: { x: 4, y: 20 },
-  Lounge: { x: 12, y: 20 },
-  "Dining Room": { x: 20, y: 20 },
-};
+interface TrackCell {
+  col: number;
+  row: number;
+  room: string | null;
+}
 
-function roomStepsRequired(from: string, to: string): number {
-  const a = ROOM_COORDS[from];
-  const b = ROOM_COORDS[to];
-  if (!a || !b) return 0;
-  return Math.ceil((Math.abs(a.x - b.x) + Math.abs(a.y - b.y)) / 4);
+const TRACK: TrackCell[] = [
+  { col: 0, row: 0, room: "Kitchen" },
+  { col: 1, row: 0, room: null },
+  { col: 2, row: 0, room: null },
+  { col: 3, row: 0, room: null },
+  { col: 4, row: 0, room: "Ballroom" },
+  { col: 5, row: 0, room: null },
+  { col: 6, row: 0, room: null },
+  { col: 7, row: 0, room: null },
+  { col: 8, row: 0, room: "Conservatory" },
+  { col: 8, row: 1, room: null },
+  { col: 8, row: 2, room: null },
+  { col: 8, row: 3, room: null },
+  { col: 8, row: 4, room: "Study" },
+  { col: 7, row: 4, room: null },
+  { col: 6, row: 4, room: null },
+  { col: 5, row: 4, room: null },
+  { col: 4, row: 4, room: "Library" },
+  { col: 3, row: 4, room: null },
+  { col: 2, row: 4, room: null },
+  { col: 1, row: 4, room: null },
+  { col: 0, row: 4, room: "Billiard Room" },
+  { col: 0, row: 5, room: null },
+  { col: 0, row: 6, room: null },
+  { col: 0, row: 7, room: null },
+  { col: 0, row: 8, room: "Hall" },
+  { col: 1, row: 8, room: null },
+  { col: 2, row: 8, room: null },
+  { col: 3, row: 8, room: null },
+  { col: 4, row: 8, room: "Lounge" },
+  { col: 5, row: 8, room: null },
+  { col: 6, row: 8, room: null },
+  { col: 7, row: 8, room: null },
+  { col: 8, row: 8, room: "Dining Room" },
+];
+
+const TRACK_LENGTH = TRACK.length;
+
+const TRACK_POS_MAP = new Map<string, number>(
+  TRACK.map((cell, i) => [`${String(cell.col)},${String(cell.row)}`, i]),
+);
+
+function reachableTrackPositions(startPos: number, roll: number): Set<number> {
+  const reachable = new Set<number>();
+  for (let i = 1; i <= roll; i++) {
+    const pos = (startPos + i) % TRACK_LENGTH;
+    if (TRACK[pos]?.room !== null) reachable.add(pos);
+  }
+  return reachable;
 }
 
 const BOARD_LAYOUT: (string | null)[][] = [
@@ -131,32 +168,52 @@ function renderPlayerList(players: PlayerState[]): void {
     .join("");
 }
 
-function buildBoard(state: GameState): string {
-  const playersByRoom: Record<string, PlayerState[]> = {};
+function buildBoard(state: GameState, reachablePositions?: Set<number>): string {
+  const playersByTrackPos = new Map<number, PlayerState[]>();
   for (const p of state.players) {
-    if (p.room) {
-      (playersByRoom[p.room] ??= []).push(p);
+    if (p.track_pos !== null) {
+      const arr = playersByTrackPos.get(p.track_pos) ?? [];
+      arr.push(p);
+      playersByTrackPos.set(p.track_pos, arr);
     }
   }
   const weaponsByRoom: Record<string, string[]> = {};
   for (const wp of state.weaponPositions) {
     (weaponsByRoom[wp.room_name] ??= []).push(wp.weapon_name);
   }
+  const me = state.players.find((p) => p.id === state.myPlayerId);
 
   const cells = BOARD_LAYOUT.flat()
-    .map((room) => {
-      if (!room) return `<div class="board-corridor"></div>`;
-      const tokens = (playersByRoom[room] ?? [])
+    .map((_, idx) => {
+      const col = idx % 9;
+      const row = Math.floor(idx / 9);
+      const trackIdx = TRACK_POS_MAP.get(`${String(col)},${String(row)}`);
+
+      if (trackIdx === undefined) {
+        return `<div class="board-dead-space"></div>`;
+      }
+
+      const cell = TRACK[trackIdx]!;
+      const playersHere = playersByTrackPos.get(trackIdx) ?? [];
+      const tokens = playersHere
         .map((p) => {
-          const tok = CHARACTER_TOKENS[p.character] ?? { css: "token-default", initial: "?" };
+          const tok = CHARACTER_TOKENS[p.character] ?? { css: "", initial: "?" };
           return `<span class="token ${tok.css}${p.is_eliminated ? " token-eliminated" : ""}" title="${p.username} (${p.character})">${tok.initial}</span>`;
         })
         .join("");
-      const weapons = (weaponsByRoom[room] ?? [])
+
+      if (!cell.room) {
+        const isCurrent = me?.track_pos === trackIdx;
+        return `<div class="board-corridor${isCurrent ? " current-pos" : ""}">${tokens}</div>`;
+      }
+
+      const isReachable = reachablePositions?.has(trackIdx) ?? false;
+      const isCurrent = me?.track_pos === trackIdx;
+      const weapons = (weaponsByRoom[cell.room] ?? [])
         .map((w) => `<span class="weapon-token">${w}</span>`)
         .join("");
-      return `<div class="board-room">
-        <div class="board-room-name">${room}</div>
+      return `<div class="board-room${isReachable ? " reachable" : ""}${isCurrent ? " current-pos" : ""}" data-track-pos="${String(trackIdx)}">
+        <div class="board-room-name">${cell.room}</div>
         <div class="board-tokens">${tokens}</div>
         ${weapons ? `<div class="board-weapons">${weapons}</div>` : ""}
       </div>`;
@@ -172,37 +229,26 @@ function buildRollPanel(): string {
 }
 
 function buildMovePanel(state: GameState): string {
-  const total = (state.currentTurn?.roll1 ?? 0) + (state.currentTurn?.roll2 ?? 0);
+  const roll = state.currentTurn?.roll1 ?? 0;
   const me = state.players.find((p) => p.id === state.myPlayerId);
-  const currentRoom = me?.room ?? null;
+  const startPos = me?.track_pos ?? 0;
+  const reachable = reachableTrackPositions(startPos, roll);
+  const exactLanding = (startPos + roll) % TRACK_LENGTH;
+  const exactIsRoom = TRACK[exactLanding]?.room !== null;
 
-  const allRooms = [
-    "Kitchen",
-    "Ballroom",
-    "Conservatory",
-    "Billiard Room",
-    "Library",
-    "Study",
-    "Hall",
-    "Lounge",
-    "Dining Room",
-  ];
-
-  const reachable = currentRoom
-    ? allRooms.filter((r) => r !== currentRoom && roomStepsRequired(currentRoom, r) <= total)
-    : allRooms;
-
-  if (reachable.length === 0) {
-    return `<div><h2>Choose a Room</h2>
-            <p class="muted">You rolled <strong>${String(state.currentTurn?.roll1)} + ${String(state.currentTurn?.roll2)} = ${String(total)}</strong>. Not enough to reach any room.</p></div>
-            <div><button id="end-turn-btn" class="btn-secondary">End Turn</button></div>`;
+  if (reachable.size === 0 && !exactIsRoom) {
+    return `<div><h2>Move</h2>
+            <p class="muted">You rolled <strong>${String(roll)}</strong>. No rooms in range — you'll land in a corridor.</p></div>
+            <div><button id="advance-btn">Advance</button></div>`;
   }
 
-  const opts = reachable.map((r) => `<option value="${r}">${r}</option>`).join("");
-  return `<div><h2>Choose a Room</h2>
-          <p class="muted">You rolled <strong>${String(state.currentTurn?.roll1)} + ${String(state.currentTurn?.roll2)} = ${String(total)}</strong>.</p></div>
-          <div class="form-group"><label>Room</label><select id="room-select">${opts}</select></div>
-          <div><button id="move-btn">Move</button></div>`;
+  return `<div><h2>Move</h2>
+          <p class="muted">You rolled <strong>${String(roll)}</strong>. Click a highlighted room on the board to move there.</p></div>`;
+}
+
+function buildDonePanel(): string {
+  return `<div><h2>Turn Complete</h2><p class="muted">End your turn to pass to the next player.</p></div>
+          <div><button id="end-turn-btn" class="btn-secondary">End Turn</button></div>`;
 }
 
 function buildAccuseSection(state: GameState): string {
@@ -286,6 +332,8 @@ function buildActionPanel(state: GameState): string {
       return state.activeSuggestion
         ? buildRespondPanel(state.activeSuggestion)
         : buildWaitPanel(state);
+    case "done":
+      return buildDonePanel();
     default:
       return buildWaitPanel(state);
   }
@@ -295,9 +343,14 @@ function attachListeners(state: GameState): void {
   document.getElementById("roll-btn")?.addEventListener("click", () => {
     void apiPost(`/api/games/${gameId}/roll`).then(() => void refreshState());
   });
-  document.getElementById("move-btn")?.addEventListener("click", () => {
-    const room = (document.getElementById("room-select") as HTMLSelectElement | null)?.value ?? "";
-    void apiPost(`/api/games/${gameId}/move`, { room }).then(() => void refreshState());
+  document.getElementById("advance-btn")?.addEventListener("click", () => {
+    const me = state.players.find((p) => p.id === state.myPlayerId);
+    const startPos = me?.track_pos ?? 0;
+    const roll = state.currentTurn?.roll1 ?? 0;
+    const targetTrackPos = (startPos + roll) % TRACK_LENGTH;
+    void apiPost(`/api/games/${gameId}/move`, { trackPos: targetTrackPos }).then(
+      () => void refreshState(),
+    );
   });
   document.getElementById("suggest-btn")?.addEventListener("click", () => {
     const suspectCardId = Number(
@@ -411,10 +464,28 @@ function renderState(state: GameState): void {
     panel.innerHTML = buildActionPanel(state);
     attachListeners(state);
   }
+
   const boardEl = document.getElementById("game-board");
   if (boardEl) {
-    boardEl.innerHTML = buildBoard(state);
+    let reachable: Set<number> | undefined;
+    if (state.phase === "move") {
+      const me = state.players.find((p) => p.id === state.myPlayerId);
+      const startPos = me?.track_pos ?? 0;
+      const roll = state.currentTurn?.roll1 ?? 0;
+      reachable = reachableTrackPositions(startPos, roll);
+    }
+    boardEl.innerHTML = buildBoard(state, reachable);
+
+    if (state.phase === "move" && reachable && reachable.size > 0) {
+      boardEl.querySelectorAll<HTMLElement>(".board-room.reachable").forEach((el) => {
+        el.addEventListener("click", () => {
+          const trackPos = Number(el.dataset["trackPos"]);
+          void apiPost(`/api/games/${gameId}/move`, { trackPos }).then(() => void refreshState());
+        });
+      });
+    }
   }
+
   renderPlayerList(state.players);
   syncHandToNotepad(state.myCards);
   renderNotepad(state);

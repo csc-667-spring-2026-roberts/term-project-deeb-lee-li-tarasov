@@ -327,10 +327,39 @@ button[type="submit"] {
   margin-top: 0.75rem;
 }
 
+.board-dead-space {
+  background: #07070e;
+}
+
 .board-corridor {
   background: #0a0a12;
   border: 1px solid #1a1a24;
   min-height: 30px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 2px;
+  gap: 2px;
+}
+
+.board-corridor.current-pos {
+  border-color: var(--accent);
+  background: #1a0808;
+}
+
+.board-room.reachable {
+  border-color: #27ae60;
+  background: #0a1a0a;
+  cursor: pointer;
+}
+
+.board-room.reachable:hover {
+  background: #122a12;
+}
+
+.board-room.current-pos {
+  border-color: var(--accent);
+  background: #1a0a0a;
 }
 
 .board-room {

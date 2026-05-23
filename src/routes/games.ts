@@ -19,7 +19,7 @@ import {
 import { gameConnect, broadcastSse } from "../sse.js";
 
 interface MoveBody {
-  room?: string;
+  trackPos?: number;
 }
 
 interface SuggestBody {
@@ -198,12 +198,12 @@ router.post("/api/games/:id/move", protectRoute, async (req, res) => {
     res.status(400).json({ error: "Invalid game id" });
     return;
   }
-  const { room } = req.body as MoveBody;
-  if (!room) {
-    res.status(400).json({ error: "Room is required" });
+  const { trackPos } = req.body as MoveBody;
+  if (trackPos === undefined) {
+    res.status(400).json({ error: "trackPos is required" });
     return;
   }
-  const error = await movePlayer(gameId, user.id, room);
+  const error = await movePlayer(gameId, user.id, trackPos);
   if (error) {
     res.status(400).json({ error });
     return;

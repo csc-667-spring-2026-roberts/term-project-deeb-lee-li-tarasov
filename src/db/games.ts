@@ -75,8 +75,7 @@ interface WeaponPlacement {
 
 interface BoardPlacement {
   playerId: number;
-  x: number;
-  y: number;
+  trackPos: number;
 }
 
 export interface GameDetail {
@@ -101,13 +100,57 @@ export interface GameWithPlayers {
   players: GamePlayerDetail[];
 }
 
-const STARTING_POSITIONS: Record<string, { x: number; y: number }> = {
-  "Miss Scarlett": { x: 17, y: 0 },
-  "Colonel Mustard": { x: 23, y: 14 },
-  "Mrs. White": { x: 9, y: 24 },
-  "Reverend Green": { x: 14, y: 24 },
-  "Mrs. Peacock": { x: 0, y: 6 },
-  "Professor Plum": { x: 0, y: 19 },
+interface TrackCell {
+  col: number;
+  row: number;
+  room: string | null;
+}
+
+const TRACK: TrackCell[] = [
+  { col: 0, row: 0, room: "Kitchen" },
+  { col: 1, row: 0, room: null },
+  { col: 2, row: 0, room: null },
+  { col: 3, row: 0, room: null },
+  { col: 4, row: 0, room: "Ballroom" },
+  { col: 5, row: 0, room: null },
+  { col: 6, row: 0, room: null },
+  { col: 7, row: 0, room: null },
+  { col: 8, row: 0, room: "Conservatory" },
+  { col: 8, row: 1, room: null },
+  { col: 8, row: 2, room: null },
+  { col: 8, row: 3, room: null },
+  { col: 8, row: 4, room: "Study" },
+  { col: 7, row: 4, room: null },
+  { col: 6, row: 4, room: null },
+  { col: 5, row: 4, room: null },
+  { col: 4, row: 4, room: "Library" },
+  { col: 3, row: 4, room: null },
+  { col: 2, row: 4, room: null },
+  { col: 1, row: 4, room: null },
+  { col: 0, row: 4, room: "Billiard Room" },
+  { col: 0, row: 5, room: null },
+  { col: 0, row: 6, room: null },
+  { col: 0, row: 7, room: null },
+  { col: 0, row: 8, room: "Hall" },
+  { col: 1, row: 8, room: null },
+  { col: 2, row: 8, room: null },
+  { col: 3, row: 8, room: null },
+  { col: 4, row: 8, room: "Lounge" },
+  { col: 5, row: 8, room: null },
+  { col: 6, row: 8, room: null },
+  { col: 7, row: 8, room: null },
+  { col: 8, row: 8, room: "Dining Room" },
+];
+
+const TRACK_LENGTH = TRACK.length;
+
+const STARTING_TRACK_POS: Record<string, number> = {
+  "Miss Scarlett": 1,
+  "Colonel Mustard": 6,
+  "Mrs. White": 10,
+  "Reverend Green": 15,
+  "Mrs. Peacock": 22,
+  "Professor Plum": 27,
 };
 
 function shuffle<T>(arr: T[]): T[] {
@@ -141,10 +184,10 @@ function buildWeaponPlacements(weapons: CardRow[], rooms: CardRow[]): WeaponPlac
 }
 
 function buildBoardPlacements(players: PlayerRow[]): BoardPlacement[] {
-  return players.map((p) => {
-    const pos = STARTING_POSITIONS[p.character] ?? { x: 0, y: 0 };
-    return { playerId: p.id, x: pos.x, y: pos.y };
-  });
+  return players.map((p) => ({
+    playerId: p.id,
+    trackPos: STARTING_TRACK_POS[p.character] ?? 1,
+  }));
 }
 
 export async function startGame(gameId: number, userId: number): Promise<string | null> {
@@ -194,8 +237,8 @@ export async function startGame(gameId: number, userId: number): Promise<string 
 
     for (const p of buildBoardPlacements(shuffledPlayers)) {
       await t.none(
-        "INSERT INTO board_positions (game_id, player_id, x, y) VALUES ($1, $2, $3, $4)",
-        [gameId, p.playerId, p.x, p.y],
+        "INSERT INTO board_positions (game_id, player_id, track_pos) VALUES ($1, $2, $3)",
+        [gameId, p.playerId, p.trackPos],
       );
     }
 
@@ -224,41 +267,10 @@ export async function startGame(gameId: number, userId: number): Promise<string 
   });
 }
 
-const VALID_ROOMS = new Set([
-  "Kitchen",
-  "Ballroom",
-  "Conservatory",
-  "Billiard Room",
-  "Library",
-  "Study",
-  "Hall",
-  "Lounge",
-  "Dining Room",
-]);
-
-const ROOM_POSITIONS: Record<string, { x: number; y: number }> = {
-  Kitchen: { x: 4, y: 4 },
-  Ballroom: { x: 12, y: 2 },
-  Conservatory: { x: 20, y: 4 },
-  "Billiard Room": { x: 4, y: 12 },
-  Library: { x: 12, y: 12 },
-  Study: { x: 20, y: 12 },
-  Hall: { x: 4, y: 20 },
-  Lounge: { x: 12, y: 20 },
-  "Dining Room": { x: 20, y: 20 },
-};
-
-export function roomStepsRequired(from: string, to: string): number {
-  const a = ROOM_POSITIONS[from];
-  const b = ROOM_POSITIONS[to];
-  if (!a || !b) return 0;
-  return Math.ceil((Math.abs(a.x - b.x) + Math.abs(a.y - b.y)) / 4);
-}
-
 export async function rollDice(
   gameId: number,
   userId: number,
-): Promise<{ roll1: number; roll2: number } | string> {
+): Promise<{ roll1: number; roll2: null } | string> {
   return db.tx(async (t) => {
     const game = await t.oneOrNone<{ status: string; current_turn_player_id: number | null }>(
       "SELECT status, current_turn_player_id FROM games WHERE id = $1",
@@ -275,23 +287,22 @@ export async function rollDice(
 
     const latest = await t.oneOrNone<{
       dice_roll_1: number | null;
-      moved_to_room: string | null;
+      moved_to_track_pos: number | null;
       player_id: number;
     }>(
-      "SELECT dice_roll_1, moved_to_room, player_id FROM game_turns WHERE game_id = $1 ORDER BY turn_number DESC LIMIT 1",
+      "SELECT dice_roll_1, moved_to_track_pos, player_id FROM game_turns WHERE game_id = $1 ORDER BY turn_number DESC LIMIT 1",
       [gameId],
     );
     if (
       latest &&
       latest.player_id === player.id &&
       latest.dice_roll_1 !== null &&
-      latest.moved_to_room === null
+      latest.moved_to_track_pos === null
     ) {
       return "Already rolled this turn.";
     }
 
     const roll1 = Math.ceil(Math.random() * 6);
-    const roll2 = Math.ceil(Math.random() * 6);
 
     const row = await t.one<{ next_turn: number }>(
       "SELECT COALESCE(MAX(turn_number), 0)::int + 1 AS next_turn FROM game_turns WHERE game_id = $1",
@@ -299,20 +310,20 @@ export async function rollDice(
     );
 
     await t.none(
-      "INSERT INTO game_turns (game_id, player_id, turn_number, dice_roll_1, dice_roll_2, action_type) VALUES ($1, $2, $3, $4, $5, 'move')",
-      [gameId, player.id, row.next_turn, roll1, roll2],
+      "INSERT INTO game_turns (game_id, player_id, turn_number, dice_roll_1, action_type) VALUES ($1, $2, $3, $4, 'move')",
+      [gameId, player.id, row.next_turn, roll1],
     );
 
-    return { roll1, roll2 };
+    return { roll1, roll2: null };
   });
 }
 
 export async function movePlayer(
   gameId: number,
   userId: number,
-  room: string,
+  targetTrackPos: number,
 ): Promise<string | null> {
-  if (!VALID_ROOMS.has(room)) return "Invalid room.";
+  if (targetTrackPos < 0 || targetTrackPos >= TRACK_LENGTH) return "Invalid position.";
 
   return db.tx(async (t) => {
     const game = await t.oneOrNone<{ status: string; current_turn_player_id: number | null }>(
@@ -328,41 +339,48 @@ export async function movePlayer(
     if (!player) return "You are not in this game.";
     if (player.id !== game.current_turn_player_id) return "It is not your turn.";
 
-    const pendingTurn = await t.oneOrNone<{
-      id: number;
-      dice_roll_1: number;
-      dice_roll_2: number;
-    }>(
-      `SELECT id, dice_roll_1, dice_roll_2 FROM game_turns
-       WHERE game_id = $1 AND player_id = $2 AND dice_roll_1 IS NOT NULL AND moved_to_room IS NULL
-       ORDER BY turn_number DESC LIMIT 1`,
+    const pendingTurn = await t.oneOrNone<{ id: number; dice_roll_1: number }>(
+      `SELECT id, dice_roll_1 FROM game_turns
+       WHERE game_id = $1 AND player_id = $2 AND dice_roll_1 IS NOT NULL AND moved_to_track_pos IS NULL
+       AND turn_number = (SELECT MAX(turn_number) FROM game_turns WHERE game_id = $1)`,
       [gameId, player.id],
     );
     if (!pendingTurn) return "Roll dice first.";
 
-    const currentPos = await t.oneOrNone<{ room: string | null }>(
-      "SELECT room FROM board_positions WHERE player_id = $1",
+    const currentPos = await t.oneOrNone<{ track_pos: number | null }>(
+      "SELECT track_pos FROM board_positions WHERE player_id = $1",
       [player.id],
     );
-    if (currentPos?.room) {
-      const diceTotal = pendingTurn.dice_roll_1 + pendingTurn.dice_roll_2;
-      const steps = roomStepsRequired(currentPos.room, room);
-      if (steps > diceTotal)
-        return `That room requires ${String(steps)} steps but you rolled ${String(diceTotal)}.`;
+    const startPos = currentPos?.track_pos ?? 0;
+    const roll = pendingTurn.dice_roll_1;
+    const exactLanding = (startPos + roll) % TRACK_LENGTH;
+
+    const isReachableRoom = (pos: number): boolean => {
+      for (let i = 1; i <= roll; i++) {
+        const p = (startPos + i) % TRACK_LENGTH;
+        if (p === pos && TRACK[p]?.room !== null) return true;
+      }
+      return false;
+    };
+
+    const isExactLanding = targetTrackPos === exactLanding;
+    if (!isReachableRoom(targetTrackPos) && !isExactLanding) {
+      return "You cannot move there with your current roll.";
     }
 
-    const pos = ROOM_POSITIONS[room] ?? { x: 0, y: 0 };
+    const cell = TRACK[targetTrackPos];
+    const room = cell?.room ?? null;
 
     await t.none(
-      "UPDATE game_turns SET moved_to_room = $1, moved_to_x = $2, moved_to_y = $3 WHERE id = $4",
-      [room, pos.x, pos.y, pendingTurn.id],
+      "UPDATE game_turns SET moved_to_room = $1, moved_to_track_pos = $2 WHERE id = $3",
+      [room, targetTrackPos, pendingTurn.id],
     );
 
     await t.none(
-      `INSERT INTO board_positions (game_id, player_id, x, y, room, updated_at)
-       VALUES ($1, $2, $3, $4, $5, now())
-       ON CONFLICT (player_id) DO UPDATE SET x = $3, y = $4, room = $5, updated_at = now()`,
-      [gameId, player.id, pos.x, pos.y, room],
+      `INSERT INTO board_positions (game_id, player_id, track_pos, room, updated_at)
+       VALUES ($1, $2, $3, $4, now())
+       ON CONFLICT (player_id) DO UPDATE SET track_pos = $3, room = $4, updated_at = now()`,
+      [gameId, player.id, targetTrackPos, room],
     );
 
     return null;
@@ -616,7 +634,7 @@ export async function advanceTurn(gameId: number): Promise<string | null> {
   });
 }
 
-export type GamePhase = "roll" | "move" | "suggest" | "respond" | "wait";
+export type GamePhase = "roll" | "move" | "suggest" | "respond" | "wait" | "done";
 
 export interface CardInfo {
   id: number;
@@ -632,8 +650,7 @@ export interface PlayerState {
   is_current_turn: boolean;
   is_eliminated: boolean;
   room: string | null;
-  x: number | null;
-  y: number | null;
+  track_pos: number | null;
 }
 
 export interface TurnState {
@@ -681,7 +698,7 @@ async function fetchPlayerStates(
     `SELECT gp.id, u.username, gp.character, gp.turn_order,
             (gp.id = $2) AS is_current_turn,
             gp.is_eliminated,
-            bp.room, bp.x, bp.y
+            bp.room, bp.track_pos
      FROM game_players gp
      JOIN users u ON u.id = gp.user_id
      LEFT JOIN board_positions bp ON bp.player_id = gp.id
@@ -705,11 +722,10 @@ async function fetchMyCards(gameId: number, playerId: number): Promise<CardInfo[
 async function fetchCurrentTurnState(gameId: number, playerId: number): Promise<TurnState | null> {
   const turn = await db.oneOrNone<{
     dice_roll_1: number | null;
-    dice_roll_2: number | null;
-    moved_to_room: string | null;
+    moved_to_track_pos: number | null;
     action_type: string;
   }>(
-    `SELECT dice_roll_1, dice_roll_2, moved_to_room, action_type
+    `SELECT dice_roll_1, moved_to_track_pos, action_type
      FROM game_turns
      WHERE game_id = $1 AND player_id = $2
        AND turn_number = (SELECT MAX(turn_number) FROM game_turns WHERE game_id = $1)
@@ -719,8 +735,8 @@ async function fetchCurrentTurnState(gameId: number, playerId: number): Promise<
   if (!turn) return null;
   return {
     roll1: turn.dice_roll_1,
-    roll2: turn.dice_roll_2,
-    moved: turn.moved_to_room !== null,
+    roll2: null,
+    moved: turn.moved_to_track_pos !== null,
     suggested: turn.action_type === "suggestion",
   };
 }
@@ -794,6 +810,7 @@ function computePhase(
   isMyTurn: boolean,
   turnState: TurnState | null,
   activeSuggestion: SuggestionState | null,
+  myRoom: string | null,
 ): GamePhase {
   if (activeSuggestion) {
     return activeSuggestion.my_turn_to_respond ? "respond" : "wait";
@@ -801,8 +818,17 @@ function computePhase(
   if (!isMyTurn) return "wait";
   if (!turnState?.roll1) return "roll";
   if (!turnState.moved) return "move";
-  if (!turnState.suggested) return "suggest";
-  return "wait";
+  if (!turnState.suggested && myRoom !== null) return "suggest";
+  return "done";
+}
+
+async function fetchWinnerUsername(winnerPlayerId: number | null): Promise<string | null> {
+  if (!winnerPlayerId) return null;
+  const row = await db.oneOrNone<{ username: string }>(
+    "SELECT u.username FROM game_players gp JOIN users u ON u.id = gp.user_id WHERE gp.id = $1",
+    [winnerPlayerId],
+  );
+  return row?.username ?? null;
 }
 
 export async function getGameState(gameId: number, userId: number): Promise<FullGameState | null> {
@@ -853,17 +879,13 @@ export async function getGameState(gameId: number, userId: number): Promise<Full
         )
       : [];
 
-  const winnerUsername = game.winner_player_id
-    ? ((
-        await db.oneOrNone<{ username: string }>(
-          "SELECT u.username FROM game_players gp JOIN users u ON u.id = gp.user_id WHERE gp.id = $1",
-          [game.winner_player_id],
-        )
-      )?.username ?? null)
-    : null;
+  const winnerUsername = await fetchWinnerUsername(game.winner_player_id);
 
+  const myRoom = players.find((p) => p.id === myPlayerId)?.room ?? null;
   const phase: GamePhase =
-    game.status === "in_progress" ? computePhase(isMyTurn, currentTurn, activeSuggestion) : "wait";
+    game.status === "in_progress"
+      ? computePhase(isMyTurn, currentTurn, activeSuggestion, myRoom)
+      : "wait";
 
   return {
     game,
