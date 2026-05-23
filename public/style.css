@@ -560,6 +560,17 @@ button[type="submit"] {
   background: #9a2020;
 }
 
+.btn-danger-sm {
+  background: #7a1a1a;
+  color: var(--text);
+  font-size: 0.75rem;
+  padding: 0.3rem 0.65rem;
+}
+
+.btn-danger-sm:hover {
+  background: #9a2020;
+}
+
 .accuse-section {
   border-top: 1px solid var(--border);
   padding-top: 1rem;

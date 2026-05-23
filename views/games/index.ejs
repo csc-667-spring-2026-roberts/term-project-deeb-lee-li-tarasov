@@ -39,6 +39,11 @@
               <% } else { %>
                 <span class="muted">Full</span>
               <% } %>
+              <% if (game.creator_username === user.username) { %>
+                <form class="inline-form" method="POST" action="/games/<%= game.id %>/delete">
+                  <button type="submit" class="btn-danger-sm">Delete</button>
+                </form>
+              <% } %>
             </div>
           </li>
         <% } %>

@@ -32,7 +32,14 @@
     <% } else { %>
       <p class="muted">Waiting for the host to start...</p>
     <% } %>
-    <div><a href="/games">← Back to Game Room</a></div>
+    <div class="action-row">
+      <a href="/games">← Back to Game Room</a>
+      <% if (isCreator) { %>
+        <form class="inline-form" method="POST" action="/games/<%= state.game.id %>/delete">
+          <button type="submit" class="btn-danger-sm">Delete Game</button>
+        </form>
+      <% } %>
+    </div>
   </div>
 
 <% } else if (state.game.status === 'finished') { %>

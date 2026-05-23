@@ -14,6 +14,7 @@ import {
   makeAccusation,
   sendChatMessage,
   getChatMessages,
+  deleteGame,
 } from "../db/games.js";
 import { gameConnect, broadcastSse } from "../sse.js";
 
@@ -289,6 +290,24 @@ router.post("/api/games/:id/accuse", protectRoute, async (req, res) => {
     broadcastSse({ type: "player_eliminated" }, { event: "state", room: `game:${String(gameId)}` });
   }
   res.json({ ok: true, correct: result.correct, eliminated: result.eliminated });
+});
+
+router.post("/games/:id/delete", protectRoute, async (req, res) => {
+  const user = res.locals.currentUser as AuthenticatedUser;
+  const gameIdStr = req.params["id"];
+  const gameId = Number(gameIdStr);
+  if (!gameIdStr || isNaN(gameId)) {
+    res.status(400).redirect("/games");
+    return;
+  }
+  const error = await deleteGame(gameId, user.id);
+  if (error) {
+    const games = await listOpenGames(user.id);
+    res.status(400).render("games/index", { title: "Games", games, user, error });
+    return;
+  }
+  broadcastSse({ type: "game_deleted" }, { event: "games", room: "lobby" });
+  res.redirect("/games");
 });
 
 router.get("/api/games/:id/chat", protectRoute, async (req, res) => {

@@ -248,6 +248,13 @@ const ROOM_POSITIONS: Record<string, { x: number; y: number }> = {
   "Dining Room": { x: 20, y: 20 },
 };
 
+export function roomStepsRequired(from: string, to: string): number {
+  const a = ROOM_POSITIONS[from];
+  const b = ROOM_POSITIONS[to];
+  if (!a || !b) return 0;
+  return Math.ceil((Math.abs(a.x - b.x) + Math.abs(a.y - b.y)) / 4);
+}
+
 export async function rollDice(
   gameId: number,
   userId: number,
@@ -321,13 +328,28 @@ export async function movePlayer(
     if (!player) return "You are not in this game.";
     if (player.id !== game.current_turn_player_id) return "It is not your turn.";
 
-    const pendingTurn = await t.oneOrNone<{ id: number }>(
-      `SELECT id FROM game_turns
+    const pendingTurn = await t.oneOrNone<{
+      id: number;
+      dice_roll_1: number;
+      dice_roll_2: number;
+    }>(
+      `SELECT id, dice_roll_1, dice_roll_2 FROM game_turns
        WHERE game_id = $1 AND player_id = $2 AND dice_roll_1 IS NOT NULL AND moved_to_room IS NULL
        ORDER BY turn_number DESC LIMIT 1`,
       [gameId, player.id],
     );
     if (!pendingTurn) return "Roll dice first.";
+
+    const currentPos = await t.oneOrNone<{ room: string | null }>(
+      "SELECT room FROM board_positions WHERE player_id = $1",
+      [player.id],
+    );
+    if (currentPos?.room) {
+      const diceTotal = pendingTurn.dice_roll_1 + pendingTurn.dice_roll_2;
+      const steps = roomStepsRequired(currentPos.room, room);
+      if (steps > diceTotal)
+        return `That room requires ${String(steps)} steps but you rolled ${String(diceTotal)}.`;
+    }
 
     const pos = ROOM_POSITIONS[room] ?? { x: 0, y: 0 };
 
@@ -904,6 +926,42 @@ export async function joinGame(gameId: number, userId: number): Promise<string |
       "INSERT INTO game_players (game_id, user_id, character, turn_order) VALUES ($1, $2, $3, $4)",
       [gameId, userId, pickCharacter(row.count), row.count + 1],
     );
+    return null;
+  });
+}
+
+export async function deleteGame(gameId: number, userId: number): Promise<string | null> {
+  return db.tx(async (t) => {
+    const game = await t.oneOrNone<{ created_by: number }>(
+      "SELECT created_by FROM games WHERE id = $1",
+      [gameId],
+    );
+    if (!game) return "Game not found.";
+    if (game.created_by !== userId) return "Only the host can delete this game.";
+
+    await t.none("DELETE FROM game_messages WHERE game_id = $1", [gameId]);
+    await t.none("DELETE FROM player_notes WHERE game_id = $1", [gameId]);
+    await t.none("DELETE FROM weapon_positions WHERE game_id = $1", [gameId]);
+    await t.none("DELETE FROM board_positions WHERE game_id = $1", [gameId]);
+    await t.none("DELETE FROM game_player_cards WHERE game_id = $1", [gameId]);
+
+    const suggestions = await t.any<{ id: number }>(
+      "SELECT id FROM suggestions WHERE game_id = $1",
+      [gameId],
+    );
+    for (const s of suggestions) {
+      await t.none("DELETE FROM suggestion_responses WHERE suggestion_id = $1", [s.id]);
+    }
+    await t.none("DELETE FROM suggestions WHERE game_id = $1", [gameId]);
+    await t.none("DELETE FROM game_turns WHERE game_id = $1", [gameId]);
+    await t.none("DELETE FROM game_solutions WHERE game_id = $1", [gameId]);
+    await t.none(
+      "UPDATE games SET current_turn_player_id = NULL, winner_player_id = NULL WHERE id = $1",
+      [gameId],
+    );
+    await t.none("DELETE FROM game_players WHERE game_id = $1", [gameId]);
+    await t.none("DELETE FROM games WHERE id = $1", [gameId]);
+
     return null;
   });
 }

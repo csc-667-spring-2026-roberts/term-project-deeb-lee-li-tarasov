@@ -1,4 +1,21 @@
 // src/client/game.ts
+var ROOM_COORDS = {
+  Kitchen: { x: 4, y: 4 },
+  Ballroom: { x: 12, y: 2 },
+  Conservatory: { x: 20, y: 4 },
+  "Billiard Room": { x: 4, y: 12 },
+  Library: { x: 12, y: 12 },
+  Study: { x: 20, y: 12 },
+  Hall: { x: 4, y: 20 },
+  Lounge: { x: 12, y: 20 },
+  "Dining Room": { x: 20, y: 20 }
+};
+function roomStepsRequired(from, to) {
+  const a = ROOM_COORDS[from];
+  const b = ROOM_COORDS[to];
+  if (!a || !b) return 0;
+  return Math.ceil((Math.abs(a.x - b.x) + Math.abs(a.y - b.y)) / 4);
+}
 var BOARD_LAYOUT = [
   ["Kitchen", null, null, null, "Ballroom", null, null, null, "Conservatory"],
   [null, null, null, null, null, null, null, null, null],
@@ -83,7 +100,10 @@ function buildRollPanel() {
           <div><button id="roll-btn">Roll Dice</button></div>`;
 }
 function buildMovePanel(state) {
-  const rooms = [
+  const total = (state.currentTurn?.roll1 ?? 0) + (state.currentTurn?.roll2 ?? 0);
+  const me = state.players.find((p) => p.id === state.myPlayerId);
+  const currentRoom = me?.room ?? null;
+  const allRooms = [
     "Kitchen",
     "Ballroom",
     "Conservatory",
@@ -94,8 +114,13 @@ function buildMovePanel(state) {
     "Lounge",
     "Dining Room"
   ];
-  const opts = rooms.map((r) => `<option value="${r}">${r}</option>`).join("");
-  const total = (state.currentTurn?.roll1 ?? 0) + (state.currentTurn?.roll2 ?? 0);
+  const reachable = currentRoom ? allRooms.filter((r) => r !== currentRoom && roomStepsRequired(currentRoom, r) <= total) : allRooms;
+  if (reachable.length === 0) {
+    return `<div><h2>Choose a Room</h2>
+            <p class="muted">You rolled <strong>${String(state.currentTurn?.roll1)} + ${String(state.currentTurn?.roll2)} = ${String(total)}</strong>. Not enough to reach any room.</p></div>
+            <div><button id="end-turn-btn" class="btn-secondary">End Turn</button></div>`;
+  }
+  const opts = reachable.map((r) => `<option value="${r}">${r}</option>`).join("");
   return `<div><h2>Choose a Room</h2>
           <p class="muted">You rolled <strong>${String(state.currentTurn?.roll1)} + ${String(state.currentTurn?.roll2)} = ${String(total)}</strong>.</p></div>
           <div class="form-group"><label>Room</label><select id="room-select">${opts}</select></div>
