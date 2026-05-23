@@ -15,10 +15,33 @@ CSC 667 Term Project — Spring 2026
 
 ```bash
 npm install
-cp .env.example .env
-# Edit .env with your database credentials
-npm run dev
+
 ```
+Make a .env file and fill this stuff out:
+PORT=
+DATABASE_URL=yourdburl
+SESSION_SECRET=change-me
+NODE_ENV=development
+
+
+
+
+```bash
+npm install
+npm run migrate
+npm run dev
+
+```
+
+## URL
+https://term-project-deeb-lee-li-tarasov.onrender.com
+
+## Known limitations
+
+- Chat feature is bugged, often displayed name as null
+- Theres no private card reveal notifications after a suggestion (big one)
+- Board is much simpler than real game, basically a fixed path.
+
 
 ## Scripts
 
@@ -28,3 +51,4 @@ npm run dev
 - `npm run lint` — Check for lint errors
 - `npm run lint:fix` — Auto-fix lint errors
 - `npm run format` — Format code with Prettier
+- `npm run migrate` - applys migration files
